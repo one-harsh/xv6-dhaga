@@ -1,0 +1,76 @@
+xv6-dhaga
+
+Dhaga Hart-integrated Asynchrony Governance Apparatus
+
+Game plan:
+
+Stage 1: Decouple proc and thread bookkeeping, no functional change
+1) Split out struct proc into struct pcb and struct tcb
+2) Swap out static struct proc[NPROC] with struct tcb[NTHREAD]
+3) Create an allocthread(), move the right subset of responsibilities from allocproc() over and invoke from there
+4) Create a freethread(), move the right subset of responsibilities from freeproc() over and invoke from there
+5) Get things back to a functional state with usertests passing
+
+Stage 2: Thread creation support, with concurrent execution across multiple harts
+1) Add sys call to support thread_create(), to alloc new thread for the process
+    call allocthread(), give it a new stack offset from the current highest stack.
+2) Implement TLB shootdown whenever the pagetable is modified
+    sfence_vma() from riscv.h flushes TLB on current hart...
+    We have to do all of the harts running threads from the same process.
+    <notes below, probably need to follow up with professor>
+3) Add some user-space program that uses this functionality, verify concurrent execution and TLB shootdown
+
+Stage 3: Add ability for thread synchronization
+3) Add sys call to support thread_join(tid), to wait for a specific other thread
+4) Add a waiting state in the tcb, and keep track of the id of the other thread it's waiting on
+5) Add sys call to support thread_exit(), which exits the thread, but not the process
+6) When a thread exits
+    Set to runnable any thread that was waiting for exiting thread
+    Clean up exiting thread's stack.
+7) Decide if there is a special "main thread" for the application, which if it thread exits, the whole process exits
+    If so, then keep track in the pcb of which one that is
+    If not, then implement automatic process exit when last thread exits
+
+Stage 4+: Optional elements and stretch goals
+*) Add a sys call to support thread yields
+*) Add ability to join with any / all other threads
+*) When allocating threads, choose the 'highest' available stack slot, in case exiting threads have left a gap
+
+Notes:
+> TLB shootdown
+See the comment here: https://stackoverflow.com/a/48465584
+"that particular TLB entry is invalidated in all of the cores ... by the OS. 
+The hardware doesn't do this automatically; the kernel has to send inter-processor interrupts 
+or otherwise signal the kernel on other cores if they're currently running tasks that use the
+page table it just modified."
+
+Two components of TLB shootdown:
+
+1) Raise a software interrupt on all other harts 
+    HLIC mentioned here:
+    https://www.kernel.org/doc/Documentation/devicetree/bindings/interrupt-controller/riscv%2Ccpu-intc.txt
+
+    We need "software interrupt" a.k.a "interprocessor interrupt" / IPI
+
+    w_sip() only does this for current hart
+    page 58 here https://courses.cs.washington.edu/courses/csep551/19au/readings/riscv-priv.pdf  
+    "Interprocessor interrupts are sent to other harts by implementation-specific means, which will
+    ultimately cause the SSIP bit to be set in the recipient hart’s sip register."
+
+    So... we have to dig into what the qemu risc-v hart impl has...
+
+    > Github issue "WFI doesn't return when a IPI is issued" (https://github.com/riscv/riscv-qemu/issues/132)
+    seems to imply that we do have IPI support...
+    
+    > Conference deck that says they added IPI
+    https://content.riscv.org/wp-content/uploads/2017/12/Wed1712_qemu_McNamara.pdf
+
+
+2) Handle the interrupt in each hart by flushing TLB if necessary
+    If the receiving hart has interrupts off, then it's not running a user thread anyway.
+    If it does get interrupted, then the trap handler should see if:
+        a) It is a software interrupt due to TLB shootdown
+        b) The pid for which the pagetable is being modified is the same.
+    If both true, then call sfence_vma() and then return to executing the thread.
+
+
