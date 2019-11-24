@@ -1,0 +1,14 @@
+*.img
+*.pcap
+*.o
+*.d
+*.sym
+*.asm
+*.out
+
+kernel/kernel
+mkfs/mkfs
+user/initcode
+
+user/*.S
+user/_*
