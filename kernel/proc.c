@@ -12,11 +12,15 @@
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
+struct thread thread[NTHREAD];
 
 struct proc *initproc;
 
 int nextpid = 1;
 struct spinlock pid_lock;
+
+int nexttid = 1;
+struct spinlock tid_lock;
 
 extern void forkret(void);
 static void wakeup1(struct proc *chan);
@@ -74,6 +78,25 @@ myproc(void) {
   return p;
 }
 
+struct thread*
+nextthread(struct proc *p)
+{
+  
+}
+
+
+int
+alloctid() {
+  int tid;
+  
+  acquire(&tid_lock);
+  tid = nexttid;
+  nexttid = nexttid + 1;
+  release(&tid_lock);
+
+  return tid;
+}
+
 int
 allocpid() {
   int pid;
@@ -84,6 +107,40 @@ allocpid() {
   release(&pid_lock);
 
   return pid;
+}
+
+static struct thread*
+allocthread(uint64 stack, uint64 fnaddr)
+{
+  struct thread *t;
+
+  for (t = thread; t < &thread[NTHREAD]; t++)
+  {
+    acquire(&t->lock);
+    if(t->state == UNUSED)
+    {
+      goto threadfound;
+    } else {
+      release(&t->lock);
+    }
+  }
+
+  return 0;
+
+threadfound:
+  t->tid = alloctid();
+
+  //TODOS:
+  // Trapframe
+
+
+  // Set up new context to start executing at forkret,
+  // which returns to user space.
+  memset(&t->context, 0, sizeof t->context);
+  t->context.ra = fnaddr;
+  t->context.sp = stack;
+  return t;
+
 }
 
 // Look in the process table for an UNUSED proc.
@@ -117,11 +174,20 @@ found:
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
 
-  // Set up new context to start executing at forkret,
-  // which returns to user space.
-  memset(&p->context, 0, sizeof p->context);
-  p->context.ra = (uint64)forkret;
-  p->context.sp = p->kstack + PGSIZE;
+  // allocate main execution thread
+  uint64 fnaddr = (uint64)forkret;
+  uint64 stack = p->kstack + PGSIZE;
+
+  struct thread *t = allocthread(p->kstack + PGSIZE, fnaddr);
+
+  if(t==0)
+  {
+    return 0;
+  }
+
+  // add to process threadpool
+  p->threads.head = t;
+  p->threads.next = 0;
 
   return p;
 }
