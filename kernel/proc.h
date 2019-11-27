@@ -82,6 +82,26 @@ struct trapframe {
 
 enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+struct thread
+{
+  struct spinlock lock;
+
+  // t->lock must be held when using these:
+  int tid;
+  enum procstate state;
+
+  // these are private to thread, lock need not be held
+  struct context context;
+};
+
+// linked list for dynamic thread allocation
+struct threadlist
+{
+  struct thread *tcb;
+  struct threadlist *next;
+};
+
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -103,4 +123,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  struct threadlist *threads;  // Data structure to handle dynamic allocation of threads
 };

@@ -12,11 +12,15 @@
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
+struct thread thread[NTHREAD];
 
 struct proc *initproc;
 
 int nextpid = 1;
 struct spinlock pid_lock;
+
+int nexttid = 1;
+struct spinlock tid_lock;
 
 extern void forkret(void);
 static void wakeup1(struct proc *chan);
@@ -74,6 +78,40 @@ myproc(void) {
   return p;
 }
 
+struct thread*
+nextrunnablethread(struct proc *p)
+{
+  printf("finding a runnable thread\n");
+  struct threadlist *t;
+
+  t = p->threads;
+  while (t!=0)
+  {
+    if(t->tcb->state == RUNNABLE)
+    {
+      printf("found thread with id:%d\n", t->tcb->tid);
+      return t->tcb;
+    }
+    t = t->next;
+  }
+
+  printf("could not find a runnable thread\n");
+  return 0;
+}
+
+
+int
+alloctid() {
+  int tid;
+  
+  acquire(&tid_lock);
+  tid = nexttid;
+  nexttid = nexttid + 1;
+  release(&tid_lock);
+
+  return tid;
+}
+
 int
 allocpid() {
   int pid;
@@ -84,6 +122,40 @@ allocpid() {
   release(&pid_lock);
 
   return pid;
+}
+
+static struct thread*
+allocthread(uint64 stack, uint64 fnaddr)
+{
+  printf("starting thread allocation\n");
+  struct thread *t;
+
+  for (t = thread; t < &thread[NTHREAD]; t++)
+  {
+    acquire(&t->lock);
+    if(t->state == UNUSED)
+    {
+      goto threadfound;
+    } else {
+      release(&t->lock);
+    }
+  }
+  printf("could not find a runnable thread\n");
+  return 0;
+
+threadfound:
+  t->tid = alloctid();
+  printf("found thread, assigned id: %d\n", t->tid);
+  release(&t->lock);
+
+  // Set up new context to start executing at forkret,
+  // which returns to user space.
+  memset(&t->context, 0, sizeof t->context);
+  t->context.ra = fnaddr;
+  t->context.sp = stack;
+  printf("thread context set with ra: %u and sp: %u\n", t->context.ra, t->context.sp);
+  return t;
+
 }
 
 // Look in the process table for an UNUSED proc.
@@ -117,13 +189,46 @@ found:
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
 
-  // Set up new context to start executing at forkret,
-  // which returns to user space.
-  memset(&p->context, 0, sizeof p->context);
-  p->context.ra = (uint64)forkret;
-  p->context.sp = p->kstack + PGSIZE;
+  // allocate main execution thread
+  uint64 fnaddr = (uint64)forkret;
+  uint64 stack = p->kstack + PGSIZE;
 
+  struct thread *t = allocthread(stack, fnaddr);
+
+  if(t==0)
+  {
+    printf("no thread allocated\n");
+    return 0;
+  }
+
+  struct threadlist threads;
+  threads.tcb = t;
+  threads.next = 0;
+  p->threads = &threads;
+
+  printf("%p %p\n", &threads, &threads.tcb);
   return p;
+}
+
+static void
+freethread(struct thread *t)
+{
+  acquire(&t->lock);
+  t->state = UNUSED;
+  t->tid = 0;
+  release(&t->lock);
+}
+
+static void
+freethreads(struct threadlist *threads)
+{
+  struct threadlist *t = threads;
+
+  while (t!=0)
+  {
+    freethread(t->tcb);
+    t = t->next;
+  }
 }
 
 // free a proc structure and the data hanging from it,
@@ -146,6 +251,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  freethreads(p->threads);
+  p->threads = 0;
 }
 
 // Create a page table for a given process,
@@ -218,7 +325,13 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+  // why no acquire for p-lock
+  struct thread *tcb = p->threads->tcb;
+
+  tcb->state = RUNNABLE;
+  release(&tcb->lock);
   release(&p->lock);
+
 }
 
 // Grow or shrink user memory by n bytes.
@@ -282,6 +395,12 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+
+  struct thread *tcb = p->threads->tcb;
+  
+  acquire(&tcb->lock);
+  tcb->state = RUNNABLE;
+  release(&tcb->lock);
 
   release(&np->lock);
 
@@ -466,7 +585,13 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
-        swtch(&c->scheduler, &p->context);
+        struct thread *t = nextrunnablethread(p);
+        acquire(&t->lock);
+
+        t->state = RUNNING;
+        swtch(&c->scheduler, &t->context);
+
+        release(&t->lock);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
@@ -499,7 +624,7 @@ sched(void)
 {
   int intena;
   struct proc *p = myproc();
-
+  
   if(!holding(&p->lock))
     panic("sched p->lock");
   if(mycpu()->noff != 1)
@@ -510,7 +635,8 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->scheduler);
+  struct thread *t = nextrunnablethread(p);
+  swtch(&t->context, &mycpu()->scheduler);
   mycpu()->intena = intena;
 }
 
