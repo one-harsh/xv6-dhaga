@@ -13,3 +13,4 @@
 #define MAXPATH      128   // maximum file path name
 #define NDISK        2
 #define NNETIF       2
+#define NTHREAD      128  // 2*NPROC
