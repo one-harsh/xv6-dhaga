@@ -663,11 +663,43 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
 }
 
 void
+tlb_shootdown_all()
+{
+  push_off();
+  int hartid = cpuid();
+  printf("TLB shootdown from %d\n", hartid);
+
+  for (int i = 0; i < NCPU; i++) {
+    if(i != hartid){
+      *(uint32*)(CLINT_MSIP(i)) = 1; 
+    }
+  }
+
+  uint32 pending;
+  int all_acked;
+  do {
+    all_acked = 1;
+    for (int i = 0; i < NCPU; i++) {
+      if(i != hartid){
+         pending = *(uint32*)(CLINT_MSIP(i));
+         //printf("pending %d:%d, ", i, pending);
+         all_acked *= (1 - pending); // If any of the pending are 1, all_acked is 0
+      }
+    }
+  } while (all_acked == 0);
+  
+  //printf("... all acked\n", hartid);
+  pop_off();
+}
+
+
+void
 ipi_next_hart()
 {
   push_off();
   int hartid = cpuid();
   printf("IPI from %d\n", hartid);
+
   int targethartid = (hartid + 1) % 3;
   *(uint32*)(CLINT_MSIP(targethartid)) = 1; 
   pop_off();

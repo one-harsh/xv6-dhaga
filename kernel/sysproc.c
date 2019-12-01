@@ -100,6 +100,6 @@ sys_uptime(void)
 uint64
 sys_ipi(void)
 {
-  ipi_next_hart();
+  tlb_shootdown_all();
   return 0;
 }
