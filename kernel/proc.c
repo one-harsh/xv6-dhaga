@@ -165,7 +165,7 @@ allocproc(void)
 
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
-    if(p->state == UNUSED) {
+    if(p->threads->tcb->state == UNUSED) {
       goto found;
     } else {
       release(&p->lock);
@@ -177,6 +177,7 @@ found:
   p->pid = allocpid();
 
   if ((p->threads = (struct threadlist *)kalloc()) == 0) {
+    release(&p->lock);
     return 0;
   }
 
@@ -226,7 +227,6 @@ freeproc(struct proc *p)
   p->name[0] = 0;
   p->killed = 0;
   p->xstate = 0;
-  p->state = UNUSED;
 }
 
 // Create a page table for a given process,
@@ -298,7 +298,6 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
-  p->state = RUNNABLE;
   p->threads->tcb->state = RUNNABLE;
 
   release(&p->threads->tcb->lock);
@@ -366,7 +365,6 @@ fork(void)
 
   pid = np->pid;
 
-  np->state = RUNNABLE;
   np->threads->tcb->state = RUNNABLE;
 
   release(&np->threads->tcb->lock);
@@ -458,7 +456,7 @@ exit(int status)
   wakeup1(original_parent);
 
   p->xstate = status;
-  p->state = ZOMBIE;
+  p->threads->tcb->state = ZOMBIE;
 
   release(&original_parent->lock);
 
@@ -494,7 +492,7 @@ wait(uint64 addr)
         // because only the parent changes it, and we're the parent.
         acquire(&np->lock);
         havekids = 1;
-        if(np->state == ZOMBIE){
+        if(np->threads->tcb->state == ZOMBIE){
           // Found one.
           pid = np->pid;
           if(addr != 0 && copyout(t->parentProc->pagetable, addr, (char *)&np->xstate,
@@ -579,8 +577,8 @@ scheduler(void)
   }
 }
 
-// Switch to scheduler.  Must hold only p->lock
-// and have changed proc->state. Saves and restores
+// Switch to scheduler.  Must hold only t->lock
+// and have changed t->state. Saves and restores
 // intena because intena is a property of this
 // kernel thread, not this CPU. It should
 // be proc->intena and proc->noff, but that would
@@ -625,7 +623,7 @@ forkret(void)
 {
   static int first = 1;
 
-  // Still holding p->lock from scheduler.
+  // Still holding t->lock from scheduler.
   release(&mythread()->lock);
 
   if (first) {
@@ -696,8 +694,7 @@ wakeup1(struct proc *p)
 {
   if(!holding(&p->lock))
     panic("wakeup1");
-  if(p->threads->tcb->chan == p && p->state == SLEEPING) {
-    p->state = RUNNABLE;
+  if(p->threads->tcb->chan == p && p->threads->tcb->state == SLEEPING) {
     p->threads->tcb->state = RUNNABLE;
   }
 }
@@ -714,9 +711,9 @@ kill(int pid)
     acquire(&p->lock);
     if(p->pid == pid){
       p->killed = 1;
-      if(p->state == SLEEPING){
+      if(p->threads->tcb->state == SLEEPING){
         // Wake process from sleep().
-        p->state = RUNNABLE;
+        p->threads->tcb->state = RUNNABLE;
       }
       release(&p->lock);
       return 0;
@@ -774,10 +771,11 @@ procdump(void)
 
   printf("\n");
   for(p = proc; p < &proc[NPROC]; p++){
-    if(p->state == UNUSED)
+    struct thread *t = p->threads->tcb;
+    if(t->state == UNUSED)
       continue;
-    if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
-      state = states[p->state];
+    if(t->state >= 0 && t->state < NELEM(states) && states[t->state])
+      state = states[t->state];
     else
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
