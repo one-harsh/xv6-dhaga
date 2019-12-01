@@ -48,7 +48,6 @@ usertrap(void)
   // since we're now in the kernel.
   w_stvec((uint64)kernelvec);
 
-  struct proc *p = myproc();
   struct thread *thread = mythread();
   
   // save user program counter.
@@ -57,7 +56,7 @@ usertrap(void)
   if(r_scause() == 8){
     // system call
 
-    if(p->killed)
+    if(thread->parentProc->killed)
       exit(-1);
 
     // sepc points to the ecall instruction,
@@ -72,12 +71,12 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    printf("usertrap(): unexpected scause %p (%s) pid=%d\n", r_scause(), scause_desc(r_scause()), p->pid);
+    printf("usertrap(): unexpected scause %p (%s) pid=%d tid=%d\n", r_scause(), scause_desc(r_scause()), thread->parentProc->pid, thread->tid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    p->killed = 1;
+    thread->parentProc->killed = 1;
   }
 
-  if(p->killed)
+  if(thread->parentProc->killed)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
@@ -93,7 +92,6 @@ usertrap(void)
 void
 usertrapret(void)
 {
-  struct proc *p = myproc();
   struct thread *thread = mythread();
 
   // turn off interrupts, since we're switching
@@ -106,7 +104,7 @@ usertrapret(void)
   // set up trapframe values that uservec will need when
   // the process next re-enters the kernel.
   thread->tf->kernel_satp = r_satp();         // kernel page table
-  thread->tf->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
+  thread->tf->kernel_sp = thread->parentProc->kstack + PGSIZE; // process's kernel stack
   thread->tf->kernel_trap = (uint64)usertrap;
   thread->tf->kernel_hartid = r_tp();         // hartid for cpuid()
 
@@ -123,7 +121,7 @@ usertrapret(void)
   w_sepc(thread->tf->epc);
 
   // tell trampoline.S the user page table to switch to.
-  uint64 satp = MAKE_SATP(p->pagetable);
+  uint64 satp = MAKE_SATP(thread->parentProc->pagetable);
 
   // jump to trampoline.S at the top of memory, which 
   // switches to the user page table, restores user registers,
