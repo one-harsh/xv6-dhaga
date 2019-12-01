@@ -8,6 +8,7 @@
 #include "file.h"
 #include "proc.h"
 #include "defs.h"
+#include "debug.h"
 
 struct cpu cpus[NCPU];
 
@@ -667,7 +668,10 @@ tlb_shootdown_all()
 {
   push_off();
   int hartid = cpuid();
-  printf("TLB shootdown from %d\n", hartid);
+
+  if(DBG_TLB_SHOOTDOWN) {
+    printf("TLB shootdown from %d\n", hartid);
+  }
 
   for (int i = 0; i < NCPU; i++) {
     if(i != hartid){
@@ -682,13 +686,28 @@ tlb_shootdown_all()
     for (int i = 0; i < NCPU; i++) {
       if(i != hartid){
          pending = *(uint32*)(CLINT_MSIP(i));
-         //printf("pending %d:%d, ", i, pending);
+
+         if(DBG_TLB_SHOOTDOWN) {
+          printf("%d", pending);
+         }
+
          all_acked *= (1 - pending); // If any of the pending are 1, all_acked is 0
+      } else {
+        if(DBG_TLB_SHOOTDOWN) {
+          printf("X");
+        }
       }
     }
+
+    if(DBG_TLB_SHOOTDOWN) {
+      printf("\n");
+    }
   } while (all_acked == 0);
+
+  if(DBG_TLB_SHOOTDOWN) {
+    printf("... all acked\n", hartid);
+  }
   
-  //printf("... all acked\n", hartid);
   pop_off();
 }
 

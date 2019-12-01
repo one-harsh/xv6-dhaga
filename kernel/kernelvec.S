@@ -166,10 +166,6 @@ ipivec:
         li a3, 0             # a3 <= 0
         sw a3, 0(a2)         # u32[a2 + 0] <= a3... write 32-bit 0 to that address!
 
-        # clear the machine mode software interrupt pending
-        # li a2, 8
-        # csrrc zero, mip, a2
-
         # raise a supervisor software interrupt.
 	li a1, 2
         csrw sip, a1

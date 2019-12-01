@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "debug.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -181,7 +182,9 @@ devintr()
   uint64 scause = r_scause();
   
   if((scause & 0x8000000000000000L) && (scause & 0xff) != 9){
-      printf("hart%d | scause %p\n", cpuid(), r_scause());
+    if(DBG_DEVINTR) {
+      printf("hart%d | scause %p\n", cpuid(), r_scause());      
+    }
   }
 
   if((scause & 0x8000000000000000L) &&
