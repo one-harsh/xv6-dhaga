@@ -95,3 +95,11 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// send an IPI to all other harts
+uint64
+sys_ipi(void)
+{
+  ipi_next_hart();
+  return 0;
+}

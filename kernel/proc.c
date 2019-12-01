@@ -662,6 +662,17 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
   }
 }
 
+void
+ipi_next_hart()
+{
+  push_off();
+  int hartid = cpuid();
+  printf("IPI from %d\n", hartid);
+  int targethartid = (hartid + 1) % 3;
+  *(uint32*)(CLINT_MSIP(targethartid)) = 1; 
+  pop_off();
+}
+
 // Print a process listing to console.  For debugging.
 // Runs when user types ^P on console.
 // No lock to avoid wedging a stuck machine further.

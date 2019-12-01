@@ -28,6 +28,7 @@ int crash(const char*, int);
 int mount(char*, char *);
 int umount(char*);
 int nfree();
+int ipi();
 
 // ulib.c
 int stat(const char*, struct stat*);
