@@ -672,6 +672,8 @@ tlb_shootdown_all()
   if(DBG_TLB_SHOOTDOWN) {
     printf("TLB shootdown from %d\n", hartid);
   }
+  
+  sfence_vma();
 
   for (int i = 0; i < NCPU; i++) {
     if(i != hartid){

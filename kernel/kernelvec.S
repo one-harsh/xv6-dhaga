@@ -157,6 +157,9 @@ ipivec:
         sd a2, 8(a0)
         sd a3, 16(a0)
 
+        # clear the TLB cache
+        sfence.vma zero, zero
+
         # clear the machine mode software interrupt pending
         li a2, 4             # a2 <= 4
         csrr a1, mhartid;    # a1 <= hartId
@@ -165,10 +168,6 @@ ipivec:
         add a2, a2, a1       # a2 <= a2 * a1.... (4*hartId) + CLINT_BASE
         li a3, 0             # a3 <= 0
         sw a3, 0(a2)         # u32[a2 + 0] <= a3... write 32-bit 0 to that address!
-
-        # raise a supervisor software interrupt.
-	li a1, 2
-        csrw sip, a1
 
         ld a3, 16(a0)
         ld a2, 8(a0)
