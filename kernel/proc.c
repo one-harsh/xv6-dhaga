@@ -46,6 +46,14 @@ procinit(void)
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
   }
+
+  struct thread *t;
+  
+  initlock(&tid_lock, "nexttid");
+  for(t = threads; t < &threads[NTHREAD]; t++) {
+      initlock(&t->lock, "thread");
+  }
+
   kvminithart();
 }
 
@@ -71,11 +79,12 @@ mycpu(void) {
 // Return the current struct proc *, or zero if none.
 struct proc*
 myproc(void) {
-  push_off();
-  struct cpu *c = mycpu();
-  struct proc *p = c->proc;
-  pop_off();
-  return p;
+  struct thread *t = mythread();
+  if (t != 0x0){
+    return t->parentProc;
+  } else {
+    return 0;
+  }
 }
 
 struct thread*
@@ -172,13 +181,8 @@ allocproc(void)
 found:
   p->pid = allocpid();
 
-  if ((p->threads = (struct threadlist *)kalloc()) == 0) {
-    return 0;
-  }
-
-  p->threads->tcb = allocThread((uint64)forkret, p->kstack + PGSIZE);
-  p->threads->next = 0;
-  p->threads->tcb->parentProc = p;
+  p->threadz[0] = allocThread((uint64)forkret, p->kstack + PGSIZE);
+  p->threadz[0]->parentProc = p;
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -189,7 +193,6 @@ found:
 static void
 freeThread(struct thread *t)
 {
-  // Handle linking of thread->previous & thread->next
   if(t->tf)
     kfree((void*)t->tf);
   t->tf = 0;
@@ -206,12 +209,11 @@ freeThread(struct thread *t)
 static void
 freeproc(struct proc *p)
 {
-  if (p->threads) {
-    struct threadlist *copyList = p->threads;
-    while (copyList) {
-      freeThread(copyList->tcb);
-      copyList = copyList->next;
-    }
+  struct thread *t;
+  for (t = p->threadz[0]; t < p->threadz[16]; t++) {
+    if(t != 0x0){
+      freeThread(t);
+    }      
   }
 
   if(p->pagetable)
@@ -245,7 +247,7 @@ proc_pagetable(struct proc *p)
   // map the trapframe just below TRAMPOLINE, for trampoline.S.
 
   mappages(pagetable, TRAPFRAME, PGSIZE,
-           (uint64)(p->threads->tcb->tf), PTE_R | PTE_W);
+           (uint64)(p->threadz[0]->tf), PTE_R | PTE_W);
 
   return pagetable;
 }
@@ -288,16 +290,16 @@ userinit(void)
   p->sz = PGSIZE;
 
   // prepare for the very first "return" from kernel to user.
-  p->threads->tcb->tf->epc = 0;      // user program counter
-  p->threads->tcb->tf->sp = PGSIZE;  // user stack pointer
+  p->threadz[0]->tf->epc = 0;      // user program counter
+  p->threadz[0]->tf->sp = PGSIZE;  // user stack pointer
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-  p->threads->tcb->state = RUNNABLE;
+  p->threadz[0]->state = RUNNABLE;
 
-  release(&p->threads->tcb->lock);
+  release(&p->threadz[0]->lock);
   release(&p->lock);
 }
 
@@ -338,7 +340,7 @@ fork(void)
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
-    release(&np->threads->tcb->lock);
+    release(&np->threadz[0]->lock);
     release(&np->lock);
     return -1;
   }
@@ -347,10 +349,10 @@ fork(void)
   np->parent = p;
 
   // copy saved user registers.
-  *(np->threads->tcb->tf) = *(p->threads->tcb->tf);
+  *(np->threadz[0]->tf) = *(p->threadz[0]->tf);
 
   // Cause fork to return 0 in the child.
-  np->threads->tcb->tf->a0 = 0;
+  np->threadz[0]->tf->a0 = 0;
 
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
@@ -363,9 +365,9 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
-  np->threads->tcb->state = RUNNABLE;
+  np->threadz[0]->state = RUNNABLE;
 
-  release(&np->threads->tcb->lock);
+  release(&np->threadz[0]->lock);
   release(&np->lock);
 
   return pid;
@@ -427,9 +429,9 @@ exit(int status)
   // acquired any other proc lock. so wake up init whether that's
   // necessary or not. init may miss this wakeup, but that seems
   // harmless.
-  acquire(&initproc->threads->tcb->lock);
-  wakeup1(initproc->threads->tcb);
-  release(&initproc->threads->tcb->lock);
+  acquire(&initproc->threadz[0]->lock);
+  wakeup1(initproc->threadz[0]);
+  release(&initproc->threadz[0]->lock);
 
   // grab a copy of p->parent, to ensure that we unlock the same
   // parent we locked. in case our parent gives us away to init while
@@ -443,7 +445,7 @@ exit(int status)
   
   // we need the parent's lock in order to wake it up from wait().
   // the parent-then-child rule says we have to lock it first.
-  acquire(&original_parent->threads->tcb->lock);
+  acquire(&original_parent->threadz[0]->lock);
 
   acquire(&t->lock);
 
@@ -451,13 +453,13 @@ exit(int status)
   reparent(t->parentProc);
 
   // Parent might be sleeping in wait().
-  wakeup1(original_parent->threads->tcb);
+  wakeup1(original_parent->threadz[0]);
 
   t->parentProc->state = ZOMBIE;
   t->xstate = status;
   t->state = ZOMBIE;
 
-  release(&original_parent->threads->tcb->lock);
+  release(&original_parent->threadz[0]->lock);
 
   // Jump into the scheduler, never to return.
   sched();
@@ -494,8 +496,8 @@ wait(uint64 addr)
         if(np->state == ZOMBIE){
           // Found one.
           pid = np->pid;
-          if(addr != 0 && copyout(t->parentProc->pagetable, addr, (char *)&np->threads->tcb->xstate,
-                                  sizeof(np->threads->tcb->xstate)) < 0) {
+          if(addr != 0 && copyout(t->parentProc->pagetable, addr, (char *)&np->threadz[0]->xstate,
+                                  sizeof(np->threadz[0]->xstate)) < 0) {
             release(&np->lock);
             release(&t->lock);
             return -1;
@@ -533,7 +535,6 @@ scheduler(void)
   struct thread *t;
   struct cpu *c = mycpu();
   
-  c->proc = 0;
   c->thread = 0;
   for(;;){
     // Avoid deadlock by giving devices a chance to interrupt.
@@ -552,13 +553,11 @@ scheduler(void)
         // to release its lock and then reacquire it
         // before jumping back to us.
         t->state = RUNNING;
-        c->proc = t->parentProc;
         c->thread = t;
         swtch(&c->scheduler, &t->context);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
-        c->proc = 0;
         c->thread = 0;
 
         found = 1;

@@ -20,7 +20,6 @@ struct context {
 
 // Per-CPU state.
 struct cpu {
-  struct proc *proc;          // The process running on this cpu, or null.
   struct thread *thread;      // Current running thread on this cpu.
   struct context scheduler;   // swtch() here to enter scheduler().
   int noff;                   // Depth of push_off() nesting.
@@ -94,11 +93,6 @@ struct thread {
   int xstate;                  // Exit status to be returned to parent's wait
 };
 
-struct threadlist {
-  struct thread *tcb;
-  struct threadlist *next;
-};
-
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -117,5 +111,5 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  struct threadlist *threads;
+  struct thread* threadz[16];
 };
