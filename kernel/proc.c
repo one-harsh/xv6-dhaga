@@ -86,6 +86,15 @@ allocpid() {
   return pid;
 }
 
+static struct thread*
+allocThread(uint64 fnAddr, uint64 stackPtrAddr) {
+  return ((struct thread *)kalloc());
+}
+
+int createThread(uint64 fnAddr) {
+  return allocThread(fnAddr, 0)->tid;
+}
+
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.

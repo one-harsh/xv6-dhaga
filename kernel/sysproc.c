@@ -30,6 +30,16 @@ sys_fork(void)
 }
 
 uint64
+sys_create_thread(void)
+{
+  uint64 fnAddr;
+  if (argaddr(0, &fnAddr) < 0) {
+    return -1;
+  }
+  return createThread(fnAddr);
+}
+
+uint64
 sys_wait(void)
 {
   uint64 p;
