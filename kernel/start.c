@@ -3,6 +3,7 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
+#include "debug.h"
 
 void main();
 void timerinit();
@@ -62,7 +63,7 @@ timerinit()
   int id = r_mhartid();
 
   // ask the CLINT for a timer interrupt.
-  int interval = 90000000; // cycles; about 1/10th second in qemu.
+  int interval = LONG_TIMER_INTERVAL ? 70000000 : 1000000; // cycles; about 7 sec /  0.1 seconds in qemu.
   *(uint64*)CLINT_MTIMECMP(id) = *(uint64*)CLINT_MTIME + interval;
 
   // prepare information in scratch[] for timervec.
