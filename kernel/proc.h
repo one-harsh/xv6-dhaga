@@ -80,14 +80,29 @@ struct trapframe {
   /* 280 */ uint64 t6;
 };
 
-enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum state { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+
+struct thread {
+  struct spinlock lock;
+  int tid;
+  struct context context;
+  void *chan;                  // If non-zero, sleeping on chan
+  struct trapframe *tf;        // data page for trampoline.S
+  struct proc *parentProc;
+  enum state state;
+};
+
+struct threadlist {
+  struct thread *tcb;
+  struct threadlist *next;
+};
 
 // Per-process state
 struct proc {
   struct spinlock lock;
 
   // p->lock must be held when using these:
-  enum procstate state;        // Process state
+  enum state state;        // Process state
   struct proc *parent;         // Parent process
   void *chan;                  // If non-zero, sleeping on chan
   int killed;                  // If non-zero, have been killed
@@ -103,4 +118,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  struct threadlist *threads;
 };
