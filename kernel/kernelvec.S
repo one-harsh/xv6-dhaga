@@ -91,21 +91,21 @@ kernelvec:
 .globl mtraphandler
 .align 8
 mtraphandler:
-        nop             # +0
-        nop             # +2
-        nop             # +4
-        nop             # +6
-        nop             # +8
-        nop             # +10
-        j ipivec        # +12
-        nop             # +14
-        nop             # +16
-        nop             # +18
-        nop             # +20
-        nop             # +22
-        nop             # +24
-        nop             # +26
-        j timervec      # +28
+        nop         # +0
+        nop         # +2
+        nop         # +4
+        nop         # +6
+        nop         # +8
+        nop         # +10
+        j ipivec    # +12, mtraphandler + 4*3 = mtvec.BASE + 4*(mcause.EXC) for MSIP
+        nop         # +14
+        nop         # +16
+        nop         # +18
+        nop         # +20
+        nop         # +22
+        nop         # +24
+        nop         # +26
+        j timervec  # +28, mtraphandler + 4*7 = mtvec.BASE + 4*(mcause.EXC) for MTIP
 
         #
         # machine-mode timer interrupt.
@@ -157,7 +157,7 @@ ipivec:
         sd a2, 8(a0)
         sd a3, 16(a0)
 
-        # clear the TLB cache
+        # clear the TLB cache, assuming that any IPI is due to a TLB shootdown request
         sfence.vma zero, zero
 
         # clear the machine mode software interrupt pending
