@@ -23,6 +23,7 @@ struct spinlock pid_lock;
 struct spinlock tid_lock;
 
 extern void forkret(void);
+static void freeThread(struct thread *t);
 static void wakeup1(struct thread *chan);
 
 extern char trampoline[]; // trampoline.S
@@ -147,7 +148,24 @@ allocThread(uint64 fnAddr, uint64 stackPtrAddr)
 }
 
 int createThread(uint64 fnAddr) {
-  return allocThread(fnAddr, 0)->tid;
+  struct thread *t = mythread();
+  struct thread *nt = allocThread(fnAddr, t->parentProc->kstack + PGSIZE);
+  nt->parentProc = t->parentProc;
+
+  struct threadlist *copy = t->parentProc->threads;
+  while (copy->next) {
+    copy = copy->next;
+  }
+
+  if ((copy->next = (struct threadlist *)kalloc()) == 0) {
+    freeThread(nt);
+    return 0;
+  }
+  copy->next->tcb = nt;
+
+  release(&nt->lock);
+  
+  return nt->tid;
 }
 
 // Look in the process table for an UNUSED proc.
@@ -210,7 +228,9 @@ freeproc(struct proc *p)
     struct threadlist *copyList = p->threads;
     while (copyList) {
       freeThread(copyList->tcb);
+      struct threadlist *temp  = copyList;
       copyList = copyList->next;
+      kfree((void*)temp);
     }
   }
 
@@ -407,6 +427,14 @@ exit(int status)
 
   if(t->parentProc == initproc)
     panic("init exiting");
+
+  if (t->parentProc->killed && t->parentProc->threads->tcb != t) {
+    acquire(&t->lock);
+    t->xstate = status;
+    t->state = ZOMBIE;
+    sched();
+    panic("zombie exit");
+  }
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
