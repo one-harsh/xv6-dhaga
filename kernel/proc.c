@@ -664,12 +664,18 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
 }
 
 void
-tlb_shootdown_all()
+tlb_shootdown_all(int log_this_one)
 {
+  if(!ENABLE_TLB_SHOOTDOWN){
+    return;
+  }
+
+  int log_tlb = log_this_one || LOG_ALWAYS_TLB_SHOOTDOWN;
+
   push_off();
   int hartid = cpuid();
 
-  if(DBG_TLB_SHOOTDOWN) {
+  if(log_tlb) {
     printf("TLB shootdown from %d\n", hartid);
   }
   
@@ -689,24 +695,24 @@ tlb_shootdown_all()
       if(i != hartid){
          pending = *(uint32*)(CLINT_MSIP(i));
 
-         if(DBG_TLB_SHOOTDOWN) {
+         if(log_tlb) {
           printf("%d", pending);
          }
 
          all_acked *= (1 - pending); // If any of the pending are 1, all_acked is 0
       } else {
-        if(DBG_TLB_SHOOTDOWN) {
+        if(log_tlb) {
           printf("X");
         }
       }
     }
 
-    if(DBG_TLB_SHOOTDOWN) {
+    if(log_tlb) {
       printf("\n");
     }
   } while (all_acked == 0);
 
-  if(DBG_TLB_SHOOTDOWN) {
+  if(log_tlb) {
     printf("... all acked\n", hartid);
   }
   

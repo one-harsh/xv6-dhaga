@@ -182,7 +182,7 @@ devintr()
   uint64 scause = r_scause();
   
   if((scause & 0x8000000000000000L) && (scause & 0xff) != 9){
-    if(DBG_DEVINTR) {
+    if(LOG_ALWAYS_DEVINTR) {
       printf("hart%d | scause %p\n", cpuid(), r_scause());      
     }
   }
