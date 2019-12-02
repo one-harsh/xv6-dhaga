@@ -162,6 +162,7 @@ int createThread(uint64 fnAddr) {
     return 0;
   }
   copy->next->tcb = nt;
+  copy->next->next = 0;
 
   release(&nt->lock);
   
@@ -428,7 +429,7 @@ exit(int status)
   if(t->parentProc == initproc)
     panic("init exiting");
 
-  if (t->parentProc->killed && t->parentProc->threads->tcb != t) {
+  if (t->parentProc->threads->tcb != t) {
     acquire(&t->lock);
     t->xstate = status;
     t->state = ZOMBIE;

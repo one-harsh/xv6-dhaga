@@ -12,11 +12,18 @@ void thread_a() {
     printf("something\n");
 }
 
-int main(int argc, char *argv[]) {
-  printf("created thread id - %d\n", create_thread(thread_a));
+void some_long_proc() {
   for (int i = 0; i < 100000; i++) {
     /* some long running unnecessary loop */
   }
+}
+
+int main(int argc, char *argv[]) {
+  printf("created thread id - %d\n", create_thread(thread_a));
+  printf("looping\n");
+  some_long_proc();
+  printf("another loop\n");
+  some_long_proc();
 
   return 0;
 }
