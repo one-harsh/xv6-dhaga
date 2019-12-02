@@ -139,10 +139,11 @@ allocThread(uint64 fnAddr, uint64 stackPtrAddr)
 
       break;
     }
+
+    release(&t->lock);
   }
 
   if (found == 0) {
-    release(&t->lock);
     return 0;
   }
 
