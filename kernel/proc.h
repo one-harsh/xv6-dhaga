@@ -21,7 +21,7 @@ struct context {
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
-  int threadId;               // Current running thread on this cpu.
+  struct thread *thread;      // Current running thread on this cpu.
   struct context scheduler;   // swtch() here to enter scheduler().
   int noff;                   // Depth of push_off() nesting.
   int intena;                 // Were interrupts enabled before push_off()?
@@ -91,6 +91,7 @@ struct thread {
   struct trapframe *tf;        // data page for trampoline.S
   struct proc *parentProc;
   enum state state;
+  int xstate;                  // Exit status to be returned to parent's wait
 };
 
 struct threadlist {
@@ -106,7 +107,6 @@ struct proc {
   enum state state;            // Process state
   struct proc *parent;         // Parent process
   int killed;                  // If non-zero, have been killed
-  int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
 
   // these are private to the process, so p->lock need not be held.

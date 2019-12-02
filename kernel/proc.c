@@ -23,7 +23,7 @@ struct spinlock pid_lock;
 struct spinlock tid_lock;
 
 extern void forkret(void);
-static void wakeup1(struct proc *chan);
+static void wakeup1(struct thread *chan);
 
 extern char trampoline[]; // trampoline.S
 
@@ -82,16 +82,7 @@ struct thread*
 mythread(void) {
   push_off();
   struct cpu *c = mycpu();
-  struct proc *p = c->proc;
-  
-  struct thread *t = 0;
-  struct threadlist *current = p->threads;
-  while (current) {
-    if (c->threadId == current->tcb->tid) {
-      t = current->tcb;
-      current = current->next;
-    }
-  }
+  struct thread *t = c->thread;
   pop_off();
   return t;
 }
@@ -206,6 +197,7 @@ freeThread(struct thread *t)
   t->chan = 0;
   t->parentProc = 0;
   t->state = UNUSED;
+  t->xstate = 0;
 }
 
 // free a proc structure and the data hanging from it,
@@ -230,7 +222,6 @@ freeproc(struct proc *p)
   p->parent = 0;
   p->name[0] = 0;
   p->killed = 0;
-  p->xstate = 0;
   p->state = UNUSED;
 }
 
@@ -412,33 +403,33 @@ reparent(struct proc *p)
 void
 exit(int status)
 {
-  struct proc *p = myproc();
+  struct thread *t = mythread();
 
-  if(p == initproc)
+  if(t->parentProc == initproc)
     panic("init exiting");
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
-    if(p->ofile[fd]){
-      struct file *f = p->ofile[fd];
+    if(t->parentProc->ofile[fd]){
+      struct file *f = t->parentProc->ofile[fd];
       fileclose(f);
-      p->ofile[fd] = 0;
+      t->parentProc->ofile[fd] = 0;
     }
   }
 
   begin_op(ROOTDEV);
-  iput(p->cwd);
+  iput(t->parentProc->cwd);
   end_op(ROOTDEV);
-  p->cwd = 0;
+  t->parentProc->cwd = 0;
 
   // we might re-parent a child to init. we can't be precise about
   // waking up init, since we can't acquire its lock once we've
   // acquired any other proc lock. so wake up init whether that's
   // necessary or not. init may miss this wakeup, but that seems
   // harmless.
-  acquire(&initproc->lock);
-  wakeup1(initproc);
-  release(&initproc->lock);
+  acquire(&initproc->threads->tcb->lock);
+  wakeup1(initproc->threads->tcb);
+  release(&initproc->threads->tcb->lock);
 
   // grab a copy of p->parent, to ensure that we unlock the same
   // parent we locked. in case our parent gives us away to init while
@@ -446,26 +437,27 @@ exit(int status)
   // exiting parent, but the result will be a harmless spurious wakeup
   // to a dead or wrong process; proc structs are never re-allocated
   // as anything else.
-  acquire(&p->lock);
-  struct proc *original_parent = p->parent;
-  release(&p->lock);
+  acquire(&t->lock);
+  struct proc *original_parent = t->parentProc->parent;
+  release(&t->lock);
   
   // we need the parent's lock in order to wake it up from wait().
   // the parent-then-child rule says we have to lock it first.
-  acquire(&original_parent->lock);
+  acquire(&original_parent->threads->tcb->lock);
 
-  acquire(&p->lock);
+  acquire(&t->lock);
 
   // Give any children to init.
-  reparent(p);
+  reparent(t->parentProc);
 
   // Parent might be sleeping in wait().
-  wakeup1(original_parent);
+  wakeup1(original_parent->threads->tcb);
 
-  p->xstate = status;
-  p->state = ZOMBIE;
+  t->parentProc->state = ZOMBIE;
+  t->xstate = status;
+  t->state = ZOMBIE;
 
-  release(&original_parent->lock);
+  release(&original_parent->threads->tcb->lock);
 
   // Jump into the scheduler, never to return.
   sched();
@@ -502,8 +494,8 @@ wait(uint64 addr)
         if(np->state == ZOMBIE){
           // Found one.
           pid = np->pid;
-          if(addr != 0 && copyout(t->parentProc->pagetable, addr, (char *)&np->xstate,
-                                  sizeof(np->xstate)) < 0) {
+          if(addr != 0 && copyout(t->parentProc->pagetable, addr, (char *)&np->threads->tcb->xstate,
+                                  sizeof(np->threads->tcb->xstate)) < 0) {
             release(&np->lock);
             release(&t->lock);
             return -1;
@@ -542,7 +534,7 @@ scheduler(void)
   struct cpu *c = mycpu();
   
   c->proc = 0;
-  c->threadId = 0;
+  c->thread = 0;
   for(;;){
     // Avoid deadlock by giving devices a chance to interrupt.
     intr_on();
@@ -561,13 +553,13 @@ scheduler(void)
         // before jumping back to us.
         t->state = RUNNING;
         c->proc = t->parentProc;
-        c->threadId = t->tid;
+        c->thread = t;
         swtch(&c->scheduler, &t->context);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
-        c->threadId = 0;
+        c->thread = 0;
 
         found = 1;
       }
@@ -598,7 +590,7 @@ sched(void)
   struct thread *t = mythread();
 
   if(!holding(&t->lock))
-    panic("sched p->lock");
+    panic("sched t->lock");
   if(mycpu()->noff != 1)
     panic("sched locks");
   if(t->state == RUNNING)
@@ -678,7 +670,7 @@ sleep(void *chan, struct spinlock *lk)
   }
 }
 
-// Wake up all processes sleeping on chan.
+// Wake up all threads sleeping on chan.
 // Must be called without any p->lock.
 void
 wakeup(void *chan)
@@ -697,13 +689,13 @@ wakeup(void *chan)
 // Wake up p if it is sleeping in wait(); used by exit().
 // Caller must hold p->lock.
 static void
-wakeup1(struct proc *p)
+wakeup1(struct thread *t)
 {
-  if(!holding(&p->lock))
+  if(!holding(&t->lock))
     panic("wakeup1");
-  if(p->threads->tcb->chan == p && p->state == SLEEPING) {
-    p->state = RUNNABLE;
-    p->threads->tcb->state = RUNNABLE;
+  if(t->chan == t && t->state == SLEEPING) {
+    t->state = RUNNABLE;
+    t->parentProc->state = RUNNABLE;
   }
 }
 
