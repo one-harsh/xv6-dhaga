@@ -32,11 +32,11 @@ sys_fork(void)
 uint64
 sys_create_thread(void)
 {
-  uint64 fnAddr, stackPtr;
-  if (argaddr(0, &fnAddr) < 0 || argaddr(1, &stackPtr) < 0) {
+  uint64 fnAddr;
+  if (argaddr(0, &fnAddr) < 0) {
     return -1;
   }
-  return allocThread(fnAddr, stackPtr)->tid;
+  return createThread(fnAddr);
 }
 
 uint64
