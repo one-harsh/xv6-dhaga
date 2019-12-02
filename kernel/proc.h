@@ -111,5 +111,8 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  struct thread* threadz[16];
+  struct thread* threadslots[NTHREAD_PER_PROC];
+  int nextFreeThreadSlot;
+
+  uint64 threadStacks[NTHREAD_PER_PROC];
 };

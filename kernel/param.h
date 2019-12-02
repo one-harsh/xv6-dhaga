@@ -14,3 +14,4 @@
 #define NDISK        2
 #define NNETIF       2
 #define NTHREAD      512  // 8*NPROC
+#define NTHREAD_PER_PROC 8

@@ -321,6 +321,7 @@ sfence_vma()
 
 
 #define PGSIZE 4096 // bytes per page
+#define THREAD_STACKSIZE 8192 // bytes per stack
 #define PGSHIFT 12  // bits of offset within a page
 
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
