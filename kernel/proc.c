@@ -136,7 +136,7 @@ grow_this_proc(struct proc *p, int n)
 }
 
 static struct thread*
-allocThread(uint64 fnAddr, uint64 stackPtrAddr)
+allocThread(uint64 kFnAddr, uint64 kStackPtrAddr, int notMain, uint64 uFnAddr, uint64 threadStackPtrAddr)
 {
   struct thread *t;
 
@@ -166,8 +166,13 @@ allocThread(uint64 fnAddr, uint64 stackPtrAddr)
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&t->context, 0, sizeof t->context);
-  t->context.ra = fnAddr;
-  t->context.sp = stackPtrAddr;
+  t->context.ra = kFnAddr;
+  t->context.sp = kStackPtrAddr;
+
+  if(notMain){
+    t->tf->epc = uFnAddr;
+    t->tf->sp = threadStackPtrAddr;
+  }
   return t;
 }
 
@@ -192,7 +197,7 @@ int createThread(uint64 fnAddr) {
   }
 
   uint64 stackForNewThread = p->threadStacks[p->nextFreeThreadSlot];
-  struct thread *nt = allocThread(fnAddr, stackForNewThread);
+  struct thread *nt = allocThread((uint64)forkret, p->kstack + PGSIZE, 1, fnAddr, stackForNewThread);
   
   if(nt == 0) {
     panic("could not alloc thread");
@@ -234,7 +239,7 @@ found:
 
   // Claim threadslot[0] as main thread.
   // using p->kstack + PGSIZE works, using threadslots[0] does not... hmm...
-  p->threadslots[0] = allocThread((uint64)forkret, p->kstack + PGSIZE);
+  p->threadslots[0] = allocThread((uint64)forkret, p->kstack + PGSIZE, 0, 0, 0);
   p->threadslots[0]->parentProc = p;
 
   printf("pid( %d ).t[ %d ] = tid( %d ) \n", p->pid, p->nextFreeThreadSlot, p->threadslots[0]->tid);
