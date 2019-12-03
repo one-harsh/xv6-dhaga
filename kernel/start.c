@@ -60,7 +60,9 @@ timerinit()
   int id = r_mhartid();
 
   // ask the CLINT for a timer interrupt.
-  int interval = 1000000; // cycles; about 1/10th second in qemu.
+  //int interval = 1000000; // cycles; about 1/10th second in qemu.
+  int interval = 10000000; // cycles; about 1/10th second in qemu.
+  printf("timer interval %d\n", interval);
   *(uint64*)CLINT_MTIMECMP(id) = *(uint64*)CLINT_MTIME + interval;
 
   // prepare information in scratch[] for timervec.

@@ -187,7 +187,6 @@ int createThread(uint64 fnAddr) {
     }
   }
 
-
   if(p->nextFreeThreadSlot >= NTHREAD_PER_PROC){
     panic("too many threads in single proc");
   }
@@ -201,9 +200,11 @@ int createThread(uint64 fnAddr) {
 
   nt->parentProc = p;
   p->threadslots[p->nextFreeThreadSlot] = nt;  
-
+  
+  printf("pid( %d ).t[ %d ] = tid( %d ) \n", p->pid, p->nextFreeThreadSlot, nt->tid);
   p->nextFreeThreadSlot++;
 
+  nt->state = RUNNABLE;
   release(&nt->lock);
 
   return nt->tid;
@@ -231,8 +232,13 @@ allocproc(void)
 found:
   p->pid = allocpid();
 
+  // Claim threadslot[0] as main thread.
+  // using p->kstack + PGSIZE works, using threadslots[0] does not... hmm...
   p->threadslots[0] = allocThread((uint64)forkret, p->kstack + PGSIZE);
   p->threadslots[0]->parentProc = p;
+
+  printf("pid( %d ).t[ %d ] = tid( %d ) \n", p->pid, p->nextFreeThreadSlot, p->threadslots[0]->tid);
+  p->nextFreeThreadSlot = 1;
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -271,6 +277,7 @@ freeproc(struct proc *p)
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
+  p->nextFreeThreadSlot = 0;
   p->parent = 0;
   p->name[0] = 0;
   p->killed = 0;
@@ -371,8 +378,8 @@ fork(void)
   struct proc *np;
   struct proc *p = myproc();
 
-  // fork() after createThread not supported yet
-  if(p->nextFreeThreadSlot > 0) {
+  // fork() not supported yet if any threads created other than main thread
+  if(p->nextFreeThreadSlot > 1) {
     return -1;
   }
 
@@ -596,6 +603,9 @@ scheduler(void)
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
+
+        printf("scheduler to tid( %d ) on hart %d\n", t->tid, cpuid());
+
         t->state = RUNNING;
         c->thread = t;
         swtch(&c->scheduler, &t->context);
@@ -642,6 +652,9 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
+
+  printf("tid( %d ) to scheduler on hart %d\n", t->tid, cpuid());
+
   swtch(&t->context, &mycpu()->scheduler);
   mycpu()->intena = intena;
 }

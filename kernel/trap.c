@@ -50,6 +50,8 @@ usertrap(void)
 
   struct thread *thread = mythread();
   
+  //printf("tid( %d ) timer intr\n", thread->tid);
+
   // save user program counter.
   thread->tf->epc = r_sepc();
   

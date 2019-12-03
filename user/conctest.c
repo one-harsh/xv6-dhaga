@@ -5,19 +5,19 @@
 void print0()
 {
     for(int i = 0; i < 10000; i++)
-        printf("0");
+        printf(" ");
 }
 
 void print1()
 {
     for(int i = 0; i < 10000; i++)
-        printf("1");
+        printf("-");
 }
 
 void print2()
 {
     for(int i = 0; i < 10000; i++)
-        printf("2");
+        printf("_");
 }
 
 int
