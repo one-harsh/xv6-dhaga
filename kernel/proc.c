@@ -27,6 +27,35 @@ static void wakeup1(struct thread *chan);
 
 extern char trampoline[]; // trampoline.S
 
+void ctx_dump(struct context ctx) {
+  printf("v--ctx[ %p ]---v\n", ctx);
+  printf("   ctx.ra          : %p\n", ctx.ra);
+  printf("   ctx.sp          : %p\n", ctx.sp);
+  printf("^--ctx[ %p ]---^\n", ctx);  
+}
+
+void tf_dump(struct trapframe *tf) {
+  printf("v---tf[ %p ]---v\n", tf);
+  printf("    tf.epc         : %p\n", tf->epc);
+  printf("    tf.ra          : %p\n", tf->ra);
+  printf("    tf.sp          : %p\n", tf->sp);
+  printf("    tf.kernel_satp : %p\n", tf->kernel_satp);
+  printf("    tf.kernel_sp   : %p\n", tf->kernel_sp);
+  printf("    tf.kernel_trap : %p\n", tf->kernel_trap);
+  printf("^---tf[ %p ]---^\n", tf);
+}
+
+void thread_dump(struct thread *t, char *tname) {
+
+  printf("v-------------------------------------tid[ %d ] | %s\n", t->tid, tname);
+  if(t->parentProc != 0){
+    printf("                                      pid[ %d ] | %s\n", t->parentProc->pid, t->parentProc->name);
+  }
+  tf_dump(t->tf);
+  ctx_dump(t->context);
+  printf("^-------------------------------------tid[ %d ]\n", t->tid);  
+}
+
 void
 procinit(void)
 {
@@ -136,7 +165,7 @@ grow_this_proc(struct proc *p, int n)
 }
 
 static struct thread*
-allocThread(uint64 kFnAddr, uint64 kStackPtrAddr, int notMain, uint64 uFnAddr, uint64 threadStackPtrAddr)
+allocThread(struct proc *p, int notMain, uint64 uFnAddr, uint64 threadStackPtrAddr)
 {
   struct thread *t;
 
@@ -166,12 +195,23 @@ allocThread(uint64 kFnAddr, uint64 kStackPtrAddr, int notMain, uint64 uFnAddr, u
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&t->context, 0, sizeof t->context);
-  t->context.ra = kFnAddr;
-  t->context.sp = kStackPtrAddr;
+  t->context.ra = (uint64)forkret;
+  t->context.sp = p->kstack + PGSIZE;
 
-  if(notMain){
+  if(notMain){    
+    *(t->tf) = *(p->threadslots[0]->tf);
+    // t->tf->kernel_satp = p->threadslots[0]->tf->kernel_satp;
+    // t->tf->kernel_sp = p->threadslots[0]->tf->kernel_sp;
+    // t->tf->kernel_hartid = p->threadslots[0]->tf->kernel_hartid;
+    // t->tf->kernel_trap = p->threadslots[0]->tf->kernel_trap;
+    // t->tf->kernel_trap = p->threadslots[0]->tf->kernel_trap;
+
     t->tf->epc = uFnAddr;
     t->tf->sp = threadStackPtrAddr;
+
+    thread_dump(t, p->name);    
+  } else {
+    thread_dump(t, p->name);
   }
   return t;
 }
@@ -180,7 +220,7 @@ int createThread(uint64 fnAddr) {
   // need some locking here?
   struct proc *p = myproc();
 
-  if (p->nextFreeThreadSlot == 0){    
+  if (p->nextFreeThreadSlot == 1){    
     // Creating the first thread now, so allocate thread stacks
     uint64 threadStack0 = p->sz;
     if(grow_this_proc(p, THREAD_STACKSIZE * NTHREAD_PER_PROC) < 0) {
@@ -197,7 +237,7 @@ int createThread(uint64 fnAddr) {
   }
 
   uint64 stackForNewThread = p->threadStacks[p->nextFreeThreadSlot];
-  struct thread *nt = allocThread((uint64)forkret, p->kstack + PGSIZE, 1, fnAddr, stackForNewThread);
+  struct thread *nt = allocThread(p, 1, fnAddr, stackForNewThread);
   
   if(nt == 0) {
     panic("could not alloc thread");
@@ -206,7 +246,7 @@ int createThread(uint64 fnAddr) {
   nt->parentProc = p;
   p->threadslots[p->nextFreeThreadSlot] = nt;  
   
-  printf("pid( %d ).t[ %d ] = tid( %d ) \n", p->pid, p->nextFreeThreadSlot, nt->tid);
+  printf("pid( %d ).t[ %d ] = tid( %d ) | [%s].child \n", p->pid, p->nextFreeThreadSlot, nt->tid, p->name);
   p->nextFreeThreadSlot++;
 
   nt->state = RUNNABLE;
@@ -239,10 +279,10 @@ found:
 
   // Claim threadslot[0] as main thread.
   // using p->kstack + PGSIZE works, using threadslots[0] does not... hmm...
-  p->threadslots[0] = allocThread((uint64)forkret, p->kstack + PGSIZE, 0, 0, 0);
+  p->threadslots[0] = allocThread(p, 0, 0, 0);
   p->threadslots[0]->parentProc = p;
 
-  printf("pid( %d ).t[ %d ] = tid( %d ) \n", p->pid, p->nextFreeThreadSlot, p->threadslots[0]->tid);
+  printf("pid( %d ).t[ %d ] = tid( %d ) [%s].main \n", p->pid, p->nextFreeThreadSlot, p->threadslots[0]->tid, p->name);
   p->nextFreeThreadSlot = 1;
 
   // An empty user page table.
@@ -354,6 +394,8 @@ userinit(void)
   // prepare for the very first "return" from kernel to user.
   p->threadslots[0]->tf->epc = 0;      // user program counter
   p->threadslots[0]->tf->sp = PGSIZE;  // user stack pointer
+
+  thread_dump(p->threadslots[0], "userinit");
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -610,6 +652,7 @@ scheduler(void)
         // before jumping back to us.
 
         printf("scheduler to tid( %d ) on hart %d\n", t->tid, cpuid());
+        thread_dump(t, "about to enter");
 
         t->state = RUNNING;
         c->thread = t;

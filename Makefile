@@ -181,6 +181,7 @@ UPROGS=\
 	$U/_alloctest\
 	$U/_specialtest\
 	$U/_conctest\
+	$U/_dhaga\
 	# $U/_symlinktest\
 
 fs.img: mkfs/mkfs README user/xargstest.sh $(UPROGS)
