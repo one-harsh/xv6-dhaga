@@ -228,7 +228,9 @@ freeproc(struct proc *p)
   if (p->threads) {
     struct threadlist *copyList = p->threads;
     while (copyList) {
+      acquire(&copyList->tcb->lock);
       freeThread(copyList->tcb);
+      release(&copyList->tcb->lock);
       struct threadlist *temp  = copyList;
       copyList = copyList->next;
       kfree((void*)temp);

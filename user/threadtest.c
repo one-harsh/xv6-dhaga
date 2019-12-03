@@ -8,8 +8,9 @@
 #include "kernel/memlayout.h"
 #include "kernel/riscv.h"
 
-void thread_a() {
-    printf("something\n");
+void thread_a(void) {
+  printf("something\n");
+  exit(0);
 }
 
 void some_long_proc() {
@@ -24,6 +25,16 @@ int main(int argc, char *argv[]) {
   some_long_proc();
   printf("another loop\n");
   some_long_proc();
+  printf("another loop\n");
+  some_long_proc();
+  printf("another loop\n");
+  some_long_proc();
+  printf("another loop\n");
+  some_long_proc();
+  printf("another loop\n");
+  some_long_proc();
+  printf("another loop\n");
+  some_long_proc();
 
-  return 0;
+  exit(0);
 }

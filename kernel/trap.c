@@ -71,14 +71,9 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    if (thread->tid == thread->parentProc->threads->tcb->tid) {
-      printf("usertrap(): unexpected scause %p (%s) pid=%d tid=%d\n", r_scause(), scause_desc(r_scause()), thread->parentProc->pid, thread->tid);
-      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-      thread->parentProc->killed = 1;
-    }
-    else {
-      exit(-1);
-    }
+    printf("usertrap(): unexpected scause %p (%s) pid=%d tid=%d\n", r_scause(), scause_desc(r_scause()), thread->parentProc->pid, thread->tid);
+    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+    thread->parentProc->killed = 1;
     
   }
 
