@@ -20,7 +20,6 @@ struct context {
 
 // Per-CPU state.
 struct cpu {
-  struct proc *proc;          // The process running on this cpu, or null.
   struct thread *thread;      // Current running thread on this cpu.
   struct context scheduler;   // swtch() here to enter scheduler().
   int noff;                   // Depth of push_off() nesting.
@@ -94,28 +93,24 @@ struct thread {
   int xstate;                  // Exit status to be returned to parent's wait
 };
 
-struct threadlist {
-  struct thread *tcb;
-  struct threadlist *next;
-};
-
 // Per-process state
 struct proc {
   struct spinlock lock;
 
   // p->lock must be held when using these:
-  enum state state;            // Process state
-  struct proc *parent;         // Parent process
-  int killed;                  // If non-zero, have been killed
-  int pid;                     // Process ID
+  enum state state;                       // Process state
+  struct proc *parent;                    // Parent process
+  int killed;                             // If non-zero, have been killed
+  int pid;                                // Process ID
 
   // these are private to the process, so p->lock need not be held.
-  uint64 kstack;               // Virtual address of kernel stack
-  uint64 sz;                   // Size of process memory (bytes)
-  pagetable_t pagetable;       // Page table
-  struct file *ofile[NOFILE];  // Open files
-  struct inode *cwd;           // Current directory
-  char name[16];               // Process name (debugging)
+  uint64 kstack;                          // Virtual address of kernel stack
+  uint64 sz;                              // Size of process memory (bytes)
+  pagetable_t pagetable;                  // Page table
+  struct file *ofile[NOFILE];             // Open files
+  struct inode *cwd;                      // Current directory
+  char name[16];                          // Process name (debugging)
 
-  struct threadlist *threads;
+  struct thread* threads[NTHREADPERPROC]; // Pre-allocated threads possible for a given proc
+  uint64 stacks[NTHREADPERPROC];          // Individual stacks for the threads
 };
