@@ -218,24 +218,14 @@ int createThread(uint64 va) {
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
 // If there are no free procs, return 0.
-static struct proc*
-allocproc(void)
+int
+allocproc(struct proc *p)
 {
-  struct proc *p;
-
-  for(p = proc; p < &proc[NPROC]; p++) {
-    acquire(&p->lock);
-    if(p->state == UNUSED) {
-      goto found;
-    } else {
-      release(&p->lock);
-    }
+  if(p->state != UNUSED) {
+    return 0;
   }
-  return 0;
 
-found:
   p->pid = allocpid();
-
   p->threads[0] = allocThread(p, 0, 0);
   p->threads[0]->parentProc = p;
   p->stacks[0] = p->sz;
@@ -243,7 +233,7 @@ found:
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
 
-  return p;
+  return 1;
 }
 
 static void
@@ -339,8 +329,22 @@ void
 userinit(void)
 {
   struct proc *p;
+  int found = 0;
+  for (p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if (allocproc(p) == 0) {
+      release(&p->lock);
+    }
+    else {
+      found = 1;
+      break;
+    }
+  }
 
-  p = allocproc();
+  if(found == 0) {
+    panic("no free proc found for init\n");
+  }
+  
   initproc = p;
   
   // allocate one user page and copy init's instructions
@@ -392,7 +396,23 @@ fork(void)
   struct proc *p = myproc();
 
   // Allocate process.
-  if((np = allocproc()) == 0){
+  int found = 0;
+  for (np = proc; np < &proc[NPROC]; np++) {
+    if (p == np) {
+      continue;
+    }
+
+    acquire(&np->lock);
+    if (allocproc(np) == 0) {
+      release(&np->lock);
+    }
+    else {
+      found = 1;
+      break;
+    }
+  }
+
+  if(found == 0){
     return -1;
   }
 
@@ -403,8 +423,8 @@ fork(void)
     release(&np->lock);
     return -1;
   }
-  np->sz = p->sz;
 
+  np->sz = p->sz;
   np->parent = p;
 
   // copy saved user registers.
@@ -417,6 +437,7 @@ fork(void)
   for(i = 0; i < NOFILE; i++)
     if(mythread()->ofile[i])
       np->threads[0]->ofile[i] = filedup(mythread()->ofile[i]);
+
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
