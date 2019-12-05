@@ -143,11 +143,18 @@ syscall(void)
   struct thread *thread = mythread();
 
   num = thread->tf->a7;
+
+  if(num == SYS_nop) {
+    thread_dump(thread, "sys_nop");
+    return;
+  }
+
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     thread->tf->a0 = syscalls[num]();
-  } else {
+  } else {    
     printf("pid - %d, procname - %s, tid - %d: unknown sys call %d\n",
             p->pid, p->name, thread->tid, num);
+    panic("unknown syscall");
     thread->tf->a0 = -1;
   }
 }

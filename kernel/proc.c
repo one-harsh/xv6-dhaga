@@ -8,6 +8,7 @@
 #include "file.h"
 #include "proc.h"
 #include "defs.h"
+#include "syscall.h"
 
 struct cpu cpus[NCPU];
 
@@ -199,12 +200,18 @@ allocThread(struct proc *p, int notMain, uint64 uFnAddr, uint64 threadStackPtrAd
   t->context.sp = p->kstack + PGSIZE;
 
   if(notMain){    
-    *(t->tf) = *(p->threadslots[0]->tf);
-    // t->tf->kernel_satp = p->threadslots[0]->tf->kernel_satp;
-    // t->tf->kernel_sp = p->threadslots[0]->tf->kernel_sp;
-    // t->tf->kernel_hartid = p->threadslots[0]->tf->kernel_hartid;
-    // t->tf->kernel_trap = p->threadslots[0]->tf->kernel_trap;
-    // t->tf->kernel_trap = p->threadslots[0]->tf->kernel_trap;
+    //*(t->tf) = *(p->threadslots[0]->tf);
+    t->tf->kernel_satp = p->threadslots[0]->tf->kernel_satp;
+    t->tf->kernel_sp = p->threadslots[0]->tf->kernel_sp;
+    t->tf->kernel_hartid = p->threadslots[0]->tf->kernel_hartid;
+    t->tf->kernel_trap = p->threadslots[0]->tf->kernel_trap;
+    t->tf->gp = p->threadslots[0]->tf->gp;
+    t->tf->tp = p->threadslots[0]->tf->tp;
+    t->tf->ra = p->threadslots[0]->tf->ra;
+
+    // Hack... dunno why the thread immediately goes into a sys call
+    // so just make it do a nop, see where it goes.
+    t->tf->a7 = SYS_nop;
 
     t->tf->epc = uFnAddr;
     t->tf->sp = threadStackPtrAddr;

@@ -12,11 +12,11 @@ main(int argc, char *argv[])
 {
     printf("\n\ndhaga phat gaya\n\n");
 
-    int tid0 = create_thread(&child);
-    if(tid0 < 0 ) {
-        printf("tid = %d", tid0);
-        exit(1);
-    }
+    // int tid0 = create_thread(&child);
+    // if(tid0 < 0 ) {
+    //     printf("tid = %d", tid0);
+    //     exit(1);
+    // }
     
     printf("waiting\n");
     for(int i = 0; i < 10000000; i++);
