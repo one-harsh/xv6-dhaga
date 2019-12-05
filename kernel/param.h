@@ -16,3 +16,5 @@
 #define NTHREAD         512  // 8*NPROC
 #define NTHREADPERPROC  8
 #define THREADSTACKSIZE 8192
+
+#define DEBUGMODE       1   // Should log debug lines

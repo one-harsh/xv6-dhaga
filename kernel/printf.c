@@ -59,22 +59,13 @@ printptr(uint64 x)
     consputc(digits[x >> (sizeof(uint64) * 8 - 4)]);
 }
 
-// Print to the console. only understands %d, %x, %p, %s.
-void
-printf(char *fmt, ...)
-{
-  va_list ap;
-  int i, c, locking;
+void print(char *fmt, va_list ap) {
+  int i, c;
   char *s;
-
-  locking = pr.locking;
-  if(locking)
-    acquire(&pr.lock);
 
   if (fmt == 0)
     panic("null fmt");
 
-  va_start(ap, fmt);
   for(i = 0; (c = fmt[i] & 0xff) != 0; i++){
     if(c != '%'){
       consputc(c);
@@ -114,6 +105,36 @@ printf(char *fmt, ...)
       consputc(c);
       break;
     }
+  }
+}
+
+// Print to the console. only understands %d, %x, %p, %s.
+void
+printf(char *fmt, ...)
+{
+  int locking = pr.locking;
+  if(locking)
+    acquire(&pr.lock);
+
+  va_list ap;
+  va_start(ap, fmt);
+  print(fmt, ap);
+
+  if(locking)
+    release(&pr.lock);
+}
+
+// Logs to console if DEBUGMODE is on.
+void logf(char *fmt, ...) {
+
+  int locking = pr.locking;
+  if(locking)
+    acquire(&pr.lock);
+
+  va_list ap;
+  va_start(ap, fmt);
+  if (DEBUGMODE) {
+      print(fmt, ap);
   }
 
   if(locking)

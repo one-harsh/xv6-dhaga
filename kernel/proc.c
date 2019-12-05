@@ -487,6 +487,8 @@ exit(int status)
 {
   struct thread *t = mythread();
 
+  logf("exiting %d on %d\n", t->tid, cpuid());
+
   if(t->parentProc == initproc)
     panic("init exiting");
 
@@ -648,6 +650,9 @@ scheduler(void)
         // before jumping back to us.
         t->state = RUNNING;
         c->thread = t;
+
+        logf("printing (%d) on %d\n", mythread()->tid, cpuid());
+
         swtch(&c->scheduler, &t->context);
 
         // Process is done running for now.
