@@ -415,8 +415,8 @@ fork(void)
 
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
-    if(p->ofile[i])
-      np->ofile[i] = filedup(p->ofile[i]);
+    if(mythread()->ofile[i])
+      np->threads[0]->ofile[i] = filedup(mythread()->ofile[i]);
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
@@ -479,10 +479,10 @@ exit(int status)
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
-    if(t->parentProc->ofile[fd]){
-      struct file *f = t->parentProc->ofile[fd];
+    if(t->ofile[fd]){
+      struct file *f = t->ofile[fd];
       fileclose(f);
-      t->parentProc->ofile[fd] = 0;
+      t->ofile[fd] = 0;
     }
   }
 
