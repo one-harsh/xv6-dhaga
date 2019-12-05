@@ -198,8 +198,7 @@ int createThread(uint64 va) {
     return 0;
   }
 
-  uint64 pa = walkaddr(t->parentProc->pagetable, walkaddr(t->parentProc->pagetable, va));
-  struct thread *nt = allocThread(t->parentProc, pa, t->parentProc->stacks[i]);
+  struct thread *nt = allocThread(t->parentProc, va, t->parentProc->stacks[i]);
   if (!nt) {
     release(&t->parentProc->lock);
     return 0;
@@ -618,6 +617,7 @@ scheduler(void)
     for(t = threads; t < &threads[NTHREAD]; t++) {
       acquire(&t->lock);
       if (t->state == RUNNABLE && t->parentProc->pid == 0 && t->parentProc) {
+        // freeThread will change the current state to UNUSED.
         freeThread(t);
       }
 
