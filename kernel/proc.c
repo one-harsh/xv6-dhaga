@@ -215,8 +215,28 @@ int createThread(uint64 va) {
 }
 
 int joinThread(int tid) {
-  printf("joining thread %d\n",tid);
-  return 0;
+  struct proc *p = myproc();
+  int found = 0;
+  struct thread *t;
+  
+  for(t = p->threads; t < p->threads[NTHREADPERPROC]; t++){
+    if(t->tid == tid)
+      found == 1;
+  }
+  
+  if(found == 0){
+    return -1;
+  }
+
+  for(;;){
+    acquire(&t->lock);
+    if(t->state == ZOMBIE){
+      freeThread(t);
+      release(&t->lock);
+      return 0;
+    }
+    release(&t->lock);
+  }
 }
 
 // Look in the process table for an UNUSED proc.
