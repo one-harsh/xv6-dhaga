@@ -19,7 +19,7 @@ exec(char *path, char **argv)
   struct inode *ip;
   struct proghdr ph;
   pagetable_t pagetable = 0, oldpagetable;
-  struct proc *p = myproc();
+  struct thread *thread = mythread();
 
   begin_op(ROOTDEV);
 
@@ -35,7 +35,7 @@ exec(char *path, char **argv)
   if(elf.magic != ELF_MAGIC)
     goto bad;
 
-  if((pagetable = proc_pagetable(p)) == 0)
+  if((pagetable = proc_pagetable(thread->parentProc)) == 0)
     goto bad;
 
   // Load program into memory.
@@ -60,8 +60,8 @@ exec(char *path, char **argv)
   end_op(ROOTDEV);
   ip = 0;
 
-  p = myproc();
-  uint64 oldsz = p->sz;
+  thread = mythread();
+  uint64 oldsz = thread->parentProc->sz;
 
   // Allocate two pages at the next page boundary.
   // Use the second as the user stack.
@@ -97,20 +97,20 @@ exec(char *path, char **argv)
   // arguments to user main(argc, argv)
   // argc is returned via the system call return
   // value, which goes in a0.
-  p->tf->a1 = sp;
+  thread->tf->a1 = sp;
 
   // Save program name for debugging.
   for(last=s=path; *s; s++)
     if(*s == '/')
       last = s+1;
-  safestrcpy(p->name, last, sizeof(p->name));
+  safestrcpy(thread->parentProc->name, last, sizeof(thread->parentProc->name));
     
   // Commit to the user image.
-  oldpagetable = p->pagetable;
-  p->pagetable = pagetable;
-  p->sz = sz;
-  p->tf->epc = elf.entry;  // initial program counter = main
-  p->tf->sp = sp; // initial stack pointer
+  oldpagetable = thread->parentProc->pagetable;
+  thread->parentProc->pagetable = pagetable;
+  thread->parentProc->sz = sz;
+  thread->tf->epc = elf.entry;  // initial program counter = main
+  thread->tf->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)

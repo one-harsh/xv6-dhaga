@@ -28,7 +28,7 @@ int crash(const char*, int);
 int mount(char*, char *);
 int umount(char*);
 int nfree();
-int create_thread(void*);
+int create_thread(void (*func)());
 int join_thread(int);
 
 // ulib.c
