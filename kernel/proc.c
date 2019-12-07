@@ -219,24 +219,24 @@ int joinThread(int tid) {
   int found = 0;
   struct thread *t;
   
-  for(t = p->threads; t < p->threads[NTHREADPERPROC]; t++){
+  for(t = p->threads[0]; t < p->threads[NTHREADPERPROC]; t++){
     if(t->tid == tid)
-      found == 1;
+      found = 1;
   }
   
   if(found == 0){
     return -1;
   }
 
-  acquire(&t->lock);
   for(;;){
+    acquire(&t->lock);
     if(t->state == ZOMBIE){
       freeThread(t);
       release(&t->lock);
       return 0;
     }
+    release(&t->lock);
   }
-  release(&t->lock);
 }
 
 // Look in the process table for an UNUSED proc.
