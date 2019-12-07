@@ -40,6 +40,16 @@ sys_create_thread(void)
 }
 
 uint64
+sys_join_thread(void)
+{
+  int tid;
+  if (argint(0, &tid) < 0) {
+    return -1;
+  }
+  return joinThread(tid);
+}
+
+uint64
 sys_wait(void)
 {
   uint64 p;

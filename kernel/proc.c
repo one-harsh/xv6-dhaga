@@ -95,6 +95,11 @@ int createThread(uint64 fnAddr) {
   return allocThread(fnAddr, 0)->tid;
 }
 
+int joinThread(int tid) {
+  printf("joining thread %d\n",tid);
+  return 0;
+}
+
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
