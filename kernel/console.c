@@ -66,6 +66,7 @@ consolewrite(struct file *f, int user_src, uint64 src, int n)
   int i;
 
   acquire(&cons.lock);
+  lognoisef("starting the print from %d on %d\n", mythread()->tid, cpuid());
   for(i = 0; i < n; i++){
     char c;
     if(either_copyin(&c, user_src, src+i, 1) == -1)

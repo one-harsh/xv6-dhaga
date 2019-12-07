@@ -127,7 +127,8 @@ allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr) {
   struct thread *t;
 
   int found = 0;
-  for(t = threads; t < &threads[NTHREAD]; t++) {
+  for(int i = 0; i < NTHREAD; i++) {
+    t = &threads[i];
     acquire(&t->lock);
     if(t->state == UNUSED) {
       found = 1;
@@ -232,7 +233,7 @@ allocproc(struct proc *p)
   p->pid = allocpid();
   p->threads[0] = allocThread(p, 0, 0);
   p->threads[0]->parentProc = p;
-  p->stacks[0] = p->sz;
+  p->stacks[0] = p->kstack + PGSIZE;
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -244,8 +245,10 @@ static void
 freeThread(struct thread *t)
 {
   // Handle linking of thread->previous & thread->next
-  if(t->tf)
+  if(t->tf) {
+    logthreadf(t);
     kfree((void*)t->tf);
+  }
   t->tf = 0;
   t->tid = 0;
   t->chan = 0;
@@ -261,12 +264,13 @@ static void
 freeproc(struct proc *p)
 {
   if (p->threads) {
-    struct thread *t;
-    for (t = p->threads[0]; t < p->threads[NTHREADPERPROC]; t++) {
-      if (t) {
+    for (int i = 0; i < NTHREADPERPROC; i++) {
+      struct thread *t = p->threads[i];
+      if (p->threads[i])
         freeThread(t);
-      }
     }
+
+    logf("freed all threads\n");
   }
 
   if(p->pagetable)
@@ -498,6 +502,7 @@ exit(int status)
     panic("init exiting");
 
   if (t->parentProc && t->parentProc->threads[0] != t) {
+    logf("exiting %d on %d\n", t->tid, cpuid());
     acquire(&t->lock);
     t->xstate = status;
     t->state = ZOMBIE;
@@ -521,6 +526,8 @@ exit(int status)
   end_op(ROOTDEV);
   t->parentProc->cwd = 0;
 
+  logf("closed all files for %d\n", t->tid);
+
   // we might re-parent a child to init. we can't be precise about
   // waking up init, since we can't acquire its lock once we've
   // acquired any other proc lock. so wake up init whether that's
@@ -529,6 +536,8 @@ exit(int status)
   acquire(&initproc->threads[0]->lock);
   wakeup1(initproc->threads[0]);
   release(&initproc->threads[0]->lock);
+
+  logf("woken up initproc for %d's exit\n", t->tid);
 
   // grab a copy of p->parent, to ensure that we unlock the same
   // parent we locked. in case our parent gives us away to init while
@@ -539,6 +548,8 @@ exit(int status)
   acquire(&t->lock);
   struct proc *original_parent = t->parentProc->parent;
   release(&t->lock);
+
+  logf("found the original parent for %d as %s\n", t->tid, original_parent->name);
   
   // we need the parent's lock in order to wake it up from wait().
   // the parent-then-child rule says we have to lock it first.
@@ -548,16 +559,22 @@ exit(int status)
 
   // Give any children to init.
   reparent(t->parentProc);
+  logf("freeing %s (tid-%d))\n", t->parentProc->name, t->tid);
   freeproc(t->parentProc);
 
   // Parent might be sleeping in wait().
   wakeup1(original_parent->threads[0]);
 
-  t->parentProc->state = ZOMBIE;
-  t->xstate = status;
-  t->state = ZOMBIE;
+  if (t->parentProc) {
+    logf("setting up parent proc state for %s(%p)\n", t->parentProc->name, t->parentProc);
+    t->parentProc->state = ZOMBIE;
+    t->xstate = status;
+    t->state = ZOMBIE;
+  }
 
   release(&original_parent->threads[0]->lock);
+
+  logf("exited %d on %d\n", t->tid, cpuid());
 
   // Jump into the scheduler, never to return.
   sched();
@@ -658,7 +675,7 @@ scheduler(void)
         t->state = RUNNING;
         c->thread = t;
 
-        logf("printing (%d) on %d\n", mythread()->tid, cpuid());
+        logf("scheduling (%d) on %d\n", mythread()->tid, cpuid());
 
         swtch(&c->scheduler, &t->context);
 
