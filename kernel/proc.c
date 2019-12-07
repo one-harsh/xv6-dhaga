@@ -168,6 +168,7 @@ int createThread(uint64 va) {
   int i;
 
   acquire(&t->parentProc->lock);
+  uint64 x = t->parentProc->sz;
   if (!t->parentProc->threads[1]) {
     if (growproc((NTHREADPERPROC - 1) * THREADSTACKSIZE) < 0) {
       release(&t->parentProc->lock);
@@ -175,7 +176,7 @@ int createThread(uint64 va) {
     }
 
     for (i = 1; i < NTHREADPERPROC; i++) {
-      t->parentProc->stacks[i] = t->parentProc->sz + THREADSTACKSIZE * i;
+      t->parentProc->stacks[i] = x + THREADSTACKSIZE * i;
     }
   }
 
@@ -219,9 +220,13 @@ int joinThread(int tid) {
   int found = 0;
   struct thread *t;
   
-  for(t = p->threads[0]; t < p->threads[NTHREADPERPROC]; t++){
-    if(t->tid == tid)
+  int i = 0;
+  for(i = 0; i < NTHREADPERPROC; i++){
+    t = p->threads[i];
+    if(t && t->tid == tid) {
       found = 1;
+      break;
+    }
   }
   
   if(found == 0){
