@@ -32,9 +32,19 @@ filealloc(void)
   struct file *f;
 
   acquire(&ftable.lock);
+  struct proc *p = myproc();
+  int threadCnt = 0;
+  for (int i = 0; i < NTHREADPERPROC; i++) {
+    if (p->threads[i]) {
+      threadCnt++;
+    }
+  }
+  
+  logf("%s opened a file with %d refCount\n", p->name, threadCnt);
+
   for(f = ftable.file; f < ftable.file + NFILE; f++){
     if(f->ref == 0){
-      f->ref = 1;
+      f->ref = threadCnt;
       release(&ftable.lock);
       return f;
     }

@@ -16,3 +16,8 @@
 #define NTHREAD         512  // 8*NPROC
 #define NTHREADPERPROC  8
 #define THREADSTACKSIZE 8192
+
+#define DEBUGMODE       0   // Should log debug lines
+#define NOISEMODE       0   // Enables noise level traces
+
+#define LOG_LOCKS       0 // log lock acquisitions and releases
