@@ -228,15 +228,15 @@ int joinThread(int tid) {
     return -1;
   }
 
+  acquire(&t->lock);
   for(;;){
-    acquire(&t->lock);
     if(t->state == ZOMBIE){
       freeThread(t);
       release(&t->lock);
       return 0;
     }
-    release(&t->lock);
   }
+  release(&t->lock);
 }
 
 // Look in the process table for an UNUSED proc.
