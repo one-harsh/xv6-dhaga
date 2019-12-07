@@ -92,7 +92,6 @@ struct thread {
   enum state state;
   int xstate;                  // Exit status to be returned to parent's wait
 
-  uint64 ustack;
   uint64 kstack;
 };
 
@@ -115,5 +114,4 @@ struct proc {
 
   struct thread* threads[NTHREADPERPROC]; // Pre-allocated threads possible for a given proc
   uint64 ustacks[NTHREADPERPROC];          // Individual user stacks for the threads
-  uint64 kstacks[NTHREADPERPROC];          // Individual kernel stacks for the threads, to allow concurrent syscalls, etc.
 };

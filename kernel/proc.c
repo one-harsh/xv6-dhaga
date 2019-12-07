@@ -65,22 +65,22 @@ procinit(void)
   initlock(&pid_lock, "nextpid");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
-
-      // Allocate a page for the process's kernel stack.
-      // Map it high in memory, followed by an invalid
-      // guard page.
-      char *pa = kalloc();
-      if(pa == 0)
-        panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstacks[0] = va;
   }
 
   struct thread *t;
   initlock(&tid_lock, "nexttid");
   for(t = threads; t < &threads[NTHREAD]; t++) {
       initlock(&t->lock, "thread");
+
+      // Allocate a page for the thread's kernel stack.
+      // Map it high in memory, followed by an invalid
+      // guard page.
+      char *pa = kalloc();
+      if(pa == 0)
+        panic("kalloc");
+      uint64 va = KSTACK((int) (t - threads));
+      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      t->kstack = va;
   }
 
   kvminithart();
@@ -152,7 +152,7 @@ int alloctid() {
 
 // Returns with t->lock held.
 static struct thread*
-allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr, uint64 kstackPtrAddr) {
+allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr) {
   struct thread *t;
 
   int found = 0;
@@ -183,11 +183,8 @@ allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr, uint64 kstackPtr
   // which returns to user space.
   memset(&t->context, 0, sizeof t->context);
 
-  t->kstack = kstackPtrAddr;
-  t->ustack = stackPtrAddr;
-
   t->context.ra = (uint64)forkret;
-  t->context.sp = kstackPtrAddr;
+  t->context.sp = t->kstack + PGSIZE;
   t->tf->epc = fnAddr;
   t->tf->sp = stackPtrAddr;
 
@@ -211,16 +208,6 @@ int createThread(uint64 va) {
     for (i = 1; i < NTHREADPERPROC; i++) {
       t->parentProc->ustacks[i] = oldSize + THREADSTACKSIZE * i;
     }
-
-    oldSize = t->parentProc->sz;
-    if (growproc((NTHREADPERPROC - 1) * THREADSTACKSIZE) < 0) {
-      rel_proc(t->parentProc, "createThread_growFail");
-      return 0;
-    }
-
-    for (i = 1; i < NTHREADPERPROC; i++) {
-      t->parentProc->kstacks[i] = oldSize + THREADSTACKSIZE * i;
-    }
   }
 
   struct thread *temp;
@@ -240,7 +227,7 @@ int createThread(uint64 va) {
     return 0;
   }
 
-  struct thread *nt = allocThread(t->parentProc, va, t->parentProc->ustacks[i], t->parentProc->kstacks[i]);
+  struct thread *nt = allocThread(t->parentProc, va, t->parentProc->ustacks[i]);
   if (!nt) {
     rel_proc(t->parentProc, "createThread_allocThreadFailed");
     return 0;
@@ -273,9 +260,9 @@ allocproc(struct proc *p)
   }
 
   p->pid = allocpid();
-  p->threads[0] = allocThread(p, 0, 0, p->kstacks[0] + PGSIZE);
+  p->threads[0] = allocThread(p, 0, 0);
   p->threads[0]->parentProc = p;
-  p->ustacks[0] = p->kstacks[0] + PGSIZE;
+  //p->ustacks[0] = p->kstacks[0] + PGSIZE;
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
