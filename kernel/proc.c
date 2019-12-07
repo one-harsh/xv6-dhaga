@@ -29,6 +29,34 @@ static void wakeup1(struct thread *chan);
 
 extern char trampoline[]; // trampoline.S
 
+void acq_proc(struct proc *p, char *mname) {
+  acquire(&p->lock);
+  if(LOG_LOCKS && p->pid != 0){
+    printf("h[%d] acq'd PROC [%d] in %s()\n", cpuid(), p->pid, mname);
+  }
+}
+
+void rel_proc(struct proc *p, char *mname) {
+  if(LOG_LOCKS && p->pid != 0){
+    printf("h[%d] rel'ing P [%d] in %s()\n", cpuid(), p->pid, mname);
+  }
+  release(&p->lock);  
+}
+
+void acq_thread(struct thread *t, char *mname) {
+  acquire(&t->lock);
+  if(LOG_LOCKS && (t->tid == 3 || t->tid == 4)){
+    printf("h[%d] acq'd T [%d] in %s()\n", cpuid(), t->tid, mname);
+  }
+}
+
+void rel_thread(struct thread *t, char *mname) {
+  if(LOG_LOCKS && (t->tid == 3 || t->tid == 4)){
+    printf("h[%d] rel'ing T [%d] in %s()\n", cpuid(), t->tid, mname);
+  }
+  release(&t->lock);
+}
+
 void
 procinit(void)
 {
@@ -122,27 +150,28 @@ int alloctid() {
   return tid;
 }
 
+// Returns with t->lock held.
 static struct thread*
 allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr) {
   struct thread *t;
 
   int found = 0;
   for(t = threads; t < &threads[NTHREAD]; t++) {
-    acquire(&t->lock);
+    acq_thread(t, "allocthread");
     if(t->state == UNUSED) {
       found = 1;
       t->tid = alloctid();
 
       // Allocate a trapframe page.
       if((t->tf = (struct trapframe *)kalloc()) == 0) {
-        release(&t->lock);
+        rel_thread(t, "allocthread_failTrapframeAlloc");
         return 0;
       }
 
       break;
     }
 
-    release(&t->lock);
+    rel_thread(t, "allocthread_notFound");
   }
 
   if (found == 0) {
@@ -167,11 +196,11 @@ int createThread(uint64 va) {
   struct thread *t = mythread();
   int i;
 
-  acquire(&t->parentProc->lock);
+  acq_proc(t->parentProc, "createThread");
   if (!t->parentProc->threads[1]) {
     uint64 oldSize = t->parentProc->sz;
     if (growproc((NTHREADPERPROC - 1) * THREADSTACKSIZE) < 0) {
-      release(&t->parentProc->lock);
+      rel_proc(t->parentProc, "createThread_growFail");
       return 0;
     }
 
@@ -193,13 +222,13 @@ int createThread(uint64 va) {
   }
 
   if (!found) {
-    release(&t->parentProc->lock);
+    rel_proc(t->parentProc, "createThread_noThreadFound");
     return 0;
   }
 
   struct thread *nt = allocThread(t->parentProc, va, t->parentProc->stacks[i]);
   if (!nt) {
-    release(&t->parentProc->lock);
+    rel_proc(t->parentProc, "createThread_allocThreadFailed");
     return 0;
   }
 
@@ -212,15 +241,15 @@ int createThread(uint64 va) {
     if(nt->parentProc->ofile[i])
       nt->parentProc->ofile[i] = filedup(nt->parentProc->ofile[i]);
 
-  release(&nt->lock);
-  release(&t->parentProc->lock);
+  rel_thread(nt, "createThread_sucess");
+  rel_proc(t->parentProc, "createThread_success");
 
   return nt->tid;
 }
 
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
-// and return with p->lock held.
+// and return with p->thread[0]->lock held.
 // If there are no free procs, return 0.
 int
 allocproc(struct proc *p)
@@ -240,6 +269,7 @@ allocproc(struct proc *p)
   return 1;
 }
 
+// BUGBUG Should require that t->lock must be held?
 static void
 freeThread(struct thread *t)
 {
@@ -264,7 +294,7 @@ freeproc(struct proc *p)
     struct thread *t;
     for (t = p->threads[0]; t < p->threads[NTHREADPERPROC]; t++) {
       if (t) {
-        freeThread(t);
+        freeThread(t); // BUGBUG? Should acquire lock of each thread before freeing it?
       }
     }
   }
@@ -335,9 +365,9 @@ userinit(void)
   struct proc *p;
   int found = 0;
   for (p = proc; p < &proc[NPROC]; p++) {
-    acquire(&p->lock);
+    acq_proc(p, "userinit");
     if (allocproc(p) == 0) {
-      release(&p->lock);
+      rel_proc(p, "userinit_allocProcFailed");
     }
     else {
       found = 1;
@@ -366,8 +396,8 @@ userinit(void)
   p->state = RUNNABLE;
   p->threads[0]->state = RUNNABLE;
 
-  release(&p->threads[0]->lock);
-  release(&p->lock);
+  rel_thread(p->threads[0], "userinit_mainSuccess");
+  rel_proc(p, "userinit_mainSuccess");
 }
 
 // Grow or shrink user memory by n bytes.
@@ -375,6 +405,7 @@ userinit(void)
 int
 growproc(int n)
 {
+  // BUGBUG? acquire proc lock here?
   uint sz;
   struct proc *p = myproc();
 
@@ -398,6 +429,7 @@ fork(void)
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
+  // TODO fail here if p->threads[0] != mythread()
 
   // Allocate process.
   int found = 0;
@@ -406,9 +438,9 @@ fork(void)
       continue;
     }
 
-    acquire(&np->lock);
+    acq_proc(np, "fork");
     if (allocproc(np) == 0) {
-      release(&np->lock);
+      rel_proc(np, "fork_allocProcFailed");
     }
     else {
       found = 1;
@@ -423,8 +455,8 @@ fork(void)
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
-    release(&np->threads[0]->lock);
-    release(&np->lock);
+    rel_thread(np->threads[0], "fork_copyFail");
+    rel_proc(np, "fork_copyFail");
     return -1;
   }
 
@@ -451,8 +483,8 @@ fork(void)
   np->state = RUNNABLE;
   np->threads[0]->state = RUNNABLE;
 
-  release(&np->threads[0]->lock);
-  release(&np->lock);
+  rel_thread(np->threads[0], "fork_childSuccess");
+  rel_proc(np, "fork_success");
 
   return pid;
 }
@@ -473,19 +505,20 @@ reparent(struct proc *p)
       // pp->parent can't change between the check and the acquire()
       // because only the parent changes it, and we're the parent.
       logf("reparenting %s (%d)\n", pp->name, pp->pid);
-      acquire(&pp->lock);
+      acq_proc(pp, "reparent_child");
       pp->parent = initproc;
       // we should wake up init here, but that would require
       // initproc->lock, which would be a deadlock, since we hold
       // the lock on one of init's children (pp). this is why
       // exit() always wakes init (before acquiring any locks).
-      release(&pp->lock);
+      rel_proc(pp, "reparent_childDone");
     }
   }
 }
 
-// Exit the current process.  Does not return.
-// An exited process remains in the zombie state
+// Exit the current thread. If main thread, then exits the process
+// Does not return.
+// An exited thread remains in the zombie state
 // until its parent calls wait().
 void
 exit(int status)
@@ -498,11 +531,11 @@ exit(int status)
     panic("init exiting");
 
   if (t->parentProc && t->parentProc->threads[0] != t) {
-    acquire(&t->lock);
+    acq_thread(t, "exiting");
     t->xstate = status;
     t->state = ZOMBIE;
     sched();
-    panic("zombie exit");
+    panic("zombie child thread exit");
   }
 
   // Close all open files.
@@ -526,9 +559,9 @@ exit(int status)
   // acquired any other proc lock. so wake up init whether that's
   // necessary or not. init may miss this wakeup, but that seems
   // harmless.
-  acquire(&initproc->threads[0]->lock);
+  acq_thread(initproc->threads[0], "exit_initProc");
   wakeup1(initproc->threads[0]);
-  release(&initproc->threads[0]->lock);
+  rel_thread(initproc->threads[0], "exit_initProc");
 
   // grab a copy of p->parent, to ensure that we unlock the same
   // parent we locked. in case our parent gives us away to init while
@@ -536,15 +569,15 @@ exit(int status)
   // exiting parent, but the result will be a harmless spurious wakeup
   // to a dead or wrong process; proc structs are never re-allocated
   // as anything else.
-  acquire(&t->lock);
+  acq_thread(t, "exit_getParent");
   struct proc *original_parent = t->parentProc->parent;
-  release(&t->lock);
+  rel_thread(t, "exit_getParent");
   
   // we need the parent's lock in order to wake it up from wait().
   // the parent-then-child rule says we have to lock it first.
-  acquire(&original_parent->threads[0]->lock);
+  acq_thread(original_parent->threads[0], "exit_parentProcThread0");
 
-  acquire(&t->lock);
+  acq_thread(t, "exit_selfBeforeReparent");
 
   // Give any children to init.
   reparent(t->parentProc);
@@ -557,11 +590,11 @@ exit(int status)
   t->xstate = status;
   t->state = ZOMBIE;
 
-  release(&original_parent->threads[0]->lock);
+  rel_thread(original_parent->threads[0], "exit_parentProcThread0");
 
   // Jump into the scheduler, never to return.
   sched();
-  panic("zombie exit");
+  panic("zombie main thread exit");
 }
 
 // Wait for a child process to exit and return its pid.
@@ -575,9 +608,9 @@ wait(uint64 addr)
   int havekids, pid;
   struct thread *t = mythread();
 
-  // hold p->lock for the whole time to avoid lost
+  // hold t->lock for the whole time to avoid lost
   // wakeups from a child's exit().
-  acquire(&t->lock);
+  acq_thread(t, "wait");
 
   for(;;){
     // Scan through table looking for exited children.
@@ -589,29 +622,29 @@ wait(uint64 addr)
       if(np->parent == t->parentProc){
         // np->parent can't change between the check and the acquire()
         // because only the parent changes it, and we're the parent.
-        acquire(&np->lock);
+        acq_proc(np, "wait_eachprocess");
         havekids = 1;
         if(np->state == ZOMBIE){
           // Found one.
           pid = np->pid;
           if(addr != 0 && copyout(t->parentProc->pagetable, addr, (char *)&np->threads[0]->xstate,
                                   sizeof(np->threads[0]->xstate)) < 0) {
-            release(&np->lock);
-            release(&t->lock);
+            rel_proc(np, "wait_failCopyOut");
+            rel_thread(t, "wait_failCopyOut");
             return -1;
           }
           freeproc(np);
-          release(&np->lock);
-          release(&t->lock);
+          rel_proc(np, "wait_success");
+          rel_thread(t, "wait_success");
           return pid;
         }
-        release(&np->lock);
+        rel_proc(np, "wait_endEachprocess");
       }
     }
 
     // No point waiting if we don't have any children.
     if(!havekids || t->parentProc->killed){
-      release(&t->lock);
+      rel_thread(t, "wait_killedOrNoChildren");
       return -1;
     }
     
@@ -645,7 +678,7 @@ scheduler(void)
 
     int found = 0;
     for(t = threads; t < &threads[NTHREAD]; t++) {
-      acquire(&t->lock);
+      acq_thread(t, "scheduler_before");
       if (t->state == RUNNABLE && t->parentProc->pid == 0 && t->parentProc) {
         // freeThread will change the current state to UNUSED.
         freeThread(t);
@@ -662,8 +695,8 @@ scheduler(void)
 
         swtch(&c->scheduler, &t->context);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
+        // Thread is done running for now.
+        // It should have changed its t->state before coming back.
         c->thread = 0;
 
         found = 1;
@@ -673,7 +706,7 @@ scheduler(void)
       // again to avoid a race between interrupt and WFI.
       c->intena = 0;
 
-      release(&t->lock);
+      rel_thread(t, "scheduler_after");
     }
     if(found == 0){
       asm volatile("wfi");
@@ -713,11 +746,11 @@ void
 yield(void)
 {
   struct thread *t = mythread();
-  acquire(&t->lock);
+  acq_thread(t, "yield_before");
   t->state = RUNNABLE;
 
   sched();
-  release(&t->lock);
+  rel_thread(t, "yield_after");
 }
 
 // A fork child's very first scheduling by scheduler()
@@ -728,7 +761,7 @@ forkret(void)
   static int first = 1;
 
   // Still holding t->lock from scheduler.
-  release(&mythread()->lock);
+  rel_thread(mythread(), "forkret");
 
   if (first) {
     // File system initialization must be run in the context of a
@@ -755,7 +788,7 @@ sleep(void *chan, struct spinlock *lk)
   // (wakeup locks p->lock),
   // so it's okay to release lk.
   if(lk != &t->lock){  //DOC: sleeplock0
-    acquire(&t->lock);  //DOC: sleeplock1
+    acq_thread(t, "sleep");  //DOC: sleeplock1
     release(lk);
   }
 
@@ -770,7 +803,7 @@ sleep(void *chan, struct spinlock *lk)
 
   // Reacquire original lock.
   if(lk != &t->lock){
-    release(&t->lock);
+    rel_thread(t, "sleep");
     acquire(lk);
   }
 }
@@ -783,11 +816,11 @@ wakeup(void *chan)
   struct thread *t;
 
   for(t = threads; t < &threads[NTHREAD]; t++) {
-    acquire(&t->lock);
+    acq_thread(t, "wakeup_chan");
     if(t->state == SLEEPING && t->chan == chan) {
       t->state = RUNNABLE;
     }
-    release(&t->lock);
+    rel_thread(t, "wakeup_chan");
   }
 }
 
@@ -813,17 +846,17 @@ kill(int pid)
   struct proc *p;
 
   for(p = proc; p < &proc[NPROC]; p++){
-    acquire(&p->lock);
+    acq_proc(p, "kill_foreach");
     if(p->pid == pid){
       p->killed = 1;
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
       }
-      release(&p->lock);
+      rel_proc(p, "kill_insleep");
       return 0;
     }
-    release(&p->lock);
+    rel_proc(p, "kill_endForEach");
   }
   return -1;
 }

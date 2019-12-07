@@ -19,3 +19,5 @@
 
 #define DEBUGMODE       0   // Should log debug lines
 #define NOISEMODE       0   // Enables noise level traces
+
+#define LOG_LOCKS       0 // log lock acquisitions and releases

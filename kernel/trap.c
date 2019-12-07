@@ -147,7 +147,7 @@ kerneltrap()
     panic("kerneltrap: interrupts enabled");
 
   if((which_dev = devintr()) == 0){
-    printf("scause %p (%s)\n", scause, scause_desc(scause));
+    printf("scause %p (%s) on h%d\n", scause, scause_desc(scause), cpuid());
     printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
     panic("kerneltrap");
   }
