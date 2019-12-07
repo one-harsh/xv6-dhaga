@@ -18,3 +18,4 @@
 #define THREADSTACKSIZE 8192
 
 #define DEBUGMODE       0   // Should log debug lines
+#define NOISEMODE       0   // Enables noise level traces

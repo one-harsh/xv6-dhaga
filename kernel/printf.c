@@ -139,25 +139,40 @@ void logf(char *fmt, ...) {
     release(&pr.lock);
 }
 
-// Logs thread's trapframe to console if DEBUGMODE is on.
+void lognoisef(char *fmt, ...) {
+  int locking = pr.locking;
+  if(locking)
+    acquire(&pr.lock);
+
+  va_list ap;
+  va_start(ap, fmt);
+  if (NOISEMODE) {
+      print(fmt, ap);
+  }
+
+  if(locking)
+    release(&pr.lock);
+}
+
+// Logs thread's trapframe to console if NOISEMODE is on.
 void logthreadf(struct thread *t) {
-  logf("\nlogging for thread - %d on %d\n", t->tid, cpuid());
-  logf("\nt->tf->epc - %p\n", t->tf->epc);
-  logf("t->tf->sp - %p\n", t->tf->sp);
-  logf("t->tf->ra - %p\n", t->tf->ra);
+  lognoisef("\nlogging for thread - %d on %d\n", t->tid, cpuid());
+  lognoisef("\nt->tf->epc - %p\n", t->tf->epc);
+  lognoisef("t->tf->sp - %p\n", t->tf->sp);
+  lognoisef("t->tf->ra - %p\n", t->tf->ra);
   
-  logf("\nt->tf->s0 - %p\n", t->tf->s0);
-  logf("t->tf->s1 - %p\n", t->tf->s1);
-  logf("t->tf->s2 - %p\n", t->tf->s2);
-  logf("t->tf->s3 - %p\n", t->tf->s3);
-  logf("t->tf->s4 - %p\n", t->tf->s4);
-  logf("t->tf->s5 - %p\n", t->tf->s5);
-  logf("t->tf->s6 - %p\n", t->tf->s6);
-  logf("t->tf->s7 - %p\n", t->tf->s7);
-  logf("t->tf->s8 - %p\n", t->tf->s8);
-  logf("t->tf->s9 - %p\n", t->tf->s9);
-  logf("t->tf->s10 - %p\n", t->tf->s10);
-  logf("t->tf->s11 - %p\n\n", t->tf->s11);
+  lognoisef("\nt->tf->s0 - %p\n", t->tf->s0);
+  lognoisef("t->tf->s1 - %p\n", t->tf->s1);
+  lognoisef("t->tf->s2 - %p\n", t->tf->s2);
+  lognoisef("t->tf->s3 - %p\n", t->tf->s3);
+  lognoisef("t->tf->s4 - %p\n", t->tf->s4);
+  lognoisef("t->tf->s5 - %p\n", t->tf->s5);
+  lognoisef("t->tf->s6 - %p\n", t->tf->s6);
+  lognoisef("t->tf->s7 - %p\n", t->tf->s7);
+  lognoisef("t->tf->s8 - %p\n", t->tf->s8);
+  lognoisef("t->tf->s9 - %p\n", t->tf->s9);
+  lognoisef("t->tf->s10 - %p\n", t->tf->s10);
+  lognoisef("t->tf->s11 - %p\n\n", t->tf->s11);
 }
 
 void

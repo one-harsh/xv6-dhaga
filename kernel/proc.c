@@ -169,13 +169,14 @@ int createThread(uint64 va) {
 
   acquire(&t->parentProc->lock);
   if (!t->parentProc->threads[1]) {
+    uint64 oldSize = t->parentProc->sz;
     if (growproc((NTHREADPERPROC - 1) * THREADSTACKSIZE) < 0) {
       release(&t->parentProc->lock);
       return 0;
     }
 
     for (i = 1; i < NTHREADPERPROC; i++) {
-      t->parentProc->stacks[i] = t->parentProc->sz + THREADSTACKSIZE * i;
+      t->parentProc->stacks[i] = oldSize + THREADSTACKSIZE * i;
     }
   }
 
@@ -471,6 +472,7 @@ reparent(struct proc *p)
     if(pp->parent == p){
       // pp->parent can't change between the check and the acquire()
       // because only the parent changes it, and we're the parent.
+      logf("reparenting %s (%d)\n", pp->name, pp->pid);
       acquire(&pp->lock);
       pp->parent = initproc;
       // we should wake up init here, but that would require
