@@ -14,7 +14,7 @@ void thread_a(void) {
 }
 
 void some_long_proc() {
-  for (int i = 0; i < 100000; i++) {
+  for (int i = 0; i < 1000000; i++) {
     printf("");
     /* some long running unnecessary loop */
   }

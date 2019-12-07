@@ -74,7 +74,7 @@ procinit(void)
         panic("kalloc");
       uint64 va = KSTACK((int) (p - proc));
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      p->kstacks[0] = va;
   }
 
   struct thread *t;
@@ -152,7 +152,7 @@ int alloctid() {
 
 // Returns with t->lock held.
 static struct thread*
-allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr) {
+allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr, uint64 kstackPtrAddr) {
   struct thread *t;
 
   int found = 0;
@@ -183,8 +183,11 @@ allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr) {
   // which returns to user space.
   memset(&t->context, 0, sizeof t->context);
 
+  t->kstack = kstackPtrAddr;
+  t->ustack = stackPtrAddr;
+
   t->context.ra = (uint64)forkret;
-  t->context.sp = p->kstack + PGSIZE;
+  t->context.sp = kstackPtrAddr;
   t->tf->epc = fnAddr;
   t->tf->sp = stackPtrAddr;
 
@@ -206,7 +209,17 @@ int createThread(uint64 va) {
     }
 
     for (i = 1; i < NTHREADPERPROC; i++) {
-      t->parentProc->stacks[i] = oldSize + THREADSTACKSIZE * i;
+      t->parentProc->ustacks[i] = oldSize + THREADSTACKSIZE * i;
+    }
+
+    oldSize = t->parentProc->sz;
+    if (growproc((NTHREADPERPROC - 1) * THREADSTACKSIZE) < 0) {
+      rel_proc(t->parentProc, "createThread_growFail");
+      return 0;
+    }
+
+    for (i = 1; i < NTHREADPERPROC; i++) {
+      t->parentProc->kstacks[i] = oldSize + THREADSTACKSIZE * i;
     }
   }
 
@@ -227,7 +240,7 @@ int createThread(uint64 va) {
     return 0;
   }
 
-  struct thread *nt = allocThread(t->parentProc, va, t->parentProc->stacks[i]);
+  struct thread *nt = allocThread(t->parentProc, va, t->parentProc->ustacks[i], t->parentProc->kstacks[i]);
   if (!nt) {
     rel_proc(t->parentProc, "createThread_allocThreadFailed");
     return 0;
@@ -260,9 +273,9 @@ allocproc(struct proc *p)
   }
 
   p->pid = allocpid();
-  p->threads[0] = allocThread(p, 0, 0);
+  p->threads[0] = allocThread(p, 0, 0, p->kstacks[0] + PGSIZE);
   p->threads[0]->parentProc = p;
-  p->stacks[0] = p->kstack + PGSIZE;
+  p->ustacks[0] = p->kstacks[0] + PGSIZE;
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
