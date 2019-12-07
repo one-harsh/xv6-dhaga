@@ -9,12 +9,13 @@
 #include "kernel/riscv.h"
 
 void thread_a(void) {
-  printf("something\n");
+  printf("###############\n");
   exit(0);
 }
 
 void some_long_proc() {
   for (int i = 0; i < 100000; i++) {
+    printf("");
     /* some long running unnecessary loop */
   }
 }
