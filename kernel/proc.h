@@ -89,7 +89,6 @@ struct thread {
   void *chan;                  // If non-zero, sleeping on chan
   struct trapframe *tf;        // data page for trampoline.S
   struct proc *parentProc;
-  struct file *ofile[NOFILE];  // Open files
   enum state state;
   int xstate;                  // Exit status to be returned to parent's wait
 };
@@ -108,6 +107,7 @@ struct proc {
   uint64 kstack;                          // Virtual address of kernel stack
   uint64 sz;                              // Size of process memory (bytes)
   pagetable_t pagetable;                  // Page table
+  struct file *ofile[NOFILE];             // Open files
   struct inode *cwd;                      // Current directory
   char name[16];                          // Process name (debugging)
 

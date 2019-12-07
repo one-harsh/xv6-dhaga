@@ -17,4 +17,4 @@
 #define NTHREADPERPROC  8
 #define THREADSTACKSIZE 8192
 
-#define DEBUGMODE       1   // Should log debug lines
+#define DEBUGMODE       0   // Should log debug lines

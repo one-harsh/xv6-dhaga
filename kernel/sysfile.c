@@ -26,7 +26,7 @@ argfd(int n, int *pfd, struct file **pf)
 
   if(argint(n, &fd) < 0)
     return -1;
-  if(fd < 0 || fd >= NOFILE || (f=mythread()->ofile[fd]) == 0)
+  if(fd < 0 || fd >= NOFILE || (f=myproc()->ofile[fd]) == 0)
     return -1;
   if(pfd)
     *pfd = fd;
@@ -41,11 +41,11 @@ static int
 fdalloc(struct file *f)
 {
   int fd;
-  struct thread *t = mythread();
+  struct proc *p = myproc();
 
   for(fd = 0; fd < NOFILE; fd++){
-    if(t->ofile[fd] == 0){
-      t->ofile[fd] = f;
+    if(p->ofile[fd] == 0){
+      p->ofile[fd] = f;
       return fd;
     }
   }
@@ -99,7 +99,7 @@ sys_close(void)
 
   if(argfd(0, &fd, &f) < 0)
     return -1;
-  mythread()->ofile[fd] = 0;
+  myproc()->ofile[fd] = 0;
   fileclose(f);
   return 0;
 }
@@ -458,7 +458,7 @@ sys_pipe(void)
   uint64 fdarray; // user pointer to array of two integers
   struct file *rf, *wf;
   int fd0, fd1;
-  struct thread *t = mythread();
+  struct proc *p = myproc();
 
   if(argaddr(0, &fdarray) < 0)
     return -1;
@@ -467,15 +467,15 @@ sys_pipe(void)
   fd0 = -1;
   if((fd0 = fdalloc(rf)) < 0 || (fd1 = fdalloc(wf)) < 0){
     if(fd0 >= 0)
-      t->ofile[fd0] = 0;
+      p->ofile[fd0] = 0;
     fileclose(rf);
     fileclose(wf);
     return -1;
   }
-  if(copyout(t->parentProc->pagetable, fdarray, (char*)&fd0, sizeof(fd0)) < 0 ||
-     copyout(t->parentProc->pagetable, fdarray+sizeof(fd0), (char *)&fd1, sizeof(fd1)) < 0){
-    t->ofile[fd0] = 0;
-    t->ofile[fd1] = 0;
+  if(copyout(p->pagetable, fdarray, (char*)&fd0, sizeof(fd0)) < 0 ||
+     copyout(p->pagetable, fdarray+sizeof(fd0), (char *)&fd1, sizeof(fd1)) < 0){
+    p->ofile[fd0] = 0;
+    p->ofile[fd1] = 0;
     fileclose(rf);
     fileclose(wf);
     return -1;

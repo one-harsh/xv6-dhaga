@@ -185,10 +185,8 @@ int createThread(uint64 va) {
     temp = t->parentProc->threads[i];
     if (temp != t) {
       if (temp == 0) {
-        if (temp == 0) {
-          found = 1;
-          break;
-        }
+        found = 1;
+        break;
       }
     }
   }
@@ -204,9 +202,14 @@ int createThread(uint64 va) {
     return 0;
   }
 
-  memset(t->tf, 0, sizeof t->tf);
+  memset(nt->tf, 0, sizeof nt->tf);
+  logthreadf(nt);
   t->parentProc->threads[i] = nt;
   nt->parentProc = t->parentProc;
+
+  for(i = 0; i < NOFILE; i++)
+    if(nt->parentProc->ofile[i])
+      nt->parentProc->ofile[i] = filedup(nt->parentProc->ofile[i]);
 
   release(&nt->lock);
   release(&t->parentProc->lock);
@@ -435,8 +438,8 @@ fork(void)
 
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
-    if(mythread()->ofile[i])
-      np->threads[0]->ofile[i] = filedup(mythread()->ofile[i]);
+    if(myproc()->ofile[i])
+      np->ofile[i] = filedup(myproc()->ofile[i]);
 
   np->cwd = idup(p->cwd);
 
@@ -502,10 +505,12 @@ exit(int status)
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){
-    if(t->ofile[fd]){
-      struct file *f = t->ofile[fd];
+    if(t->parentProc->ofile[fd]){
+      struct file *f = t->parentProc->ofile[fd];
       fileclose(f);
-      t->ofile[fd] = 0;
+      if (t->parentProc && t->parentProc->threads[0] == t) {
+        t->parentProc->ofile[fd] = 0;
+      }
     }
   }
 
@@ -720,7 +725,7 @@ forkret(void)
 {
   static int first = 1;
 
-  // Still holding p->lock from scheduler.
+  // Still holding t->lock from scheduler.
   release(&mythread()->lock);
 
   if (first) {
