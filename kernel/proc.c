@@ -721,8 +721,7 @@ scheduler(void)
         t->state = RUNNING;
         c->thread = t;
 
-        logf("scheduling (%d) on %d\n", mythread()->tid, cpuid());
-
+        logif(LOG_SCHED, "scheduler to T(%d) on h%d\n", mythread()->tid, cpuid());
         swtch(&c->scheduler, &t->context);
 
         // Thread is done running for now.
@@ -767,6 +766,7 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
+  logif(LOG_SCHED, "T(%d) to scheduler h%d\n", mythread()->tid, cpuid());
   swtch(&t->context, &mycpu()->scheduler);
   mycpu()->intena = intena;
 }

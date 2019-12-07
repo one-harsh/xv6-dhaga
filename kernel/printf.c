@@ -123,6 +123,23 @@ printf(char *fmt, ...) {
     release(&pr.lock);
 }
 
+void logif(int debug_flag, char *fmt, ...) {
+  if(debug_flag == 0){
+    return;
+  }
+
+  int locking = pr.locking;
+  if(locking)
+    acquire(&pr.lock);
+
+  va_list ap;
+  va_start(ap, fmt);
+  print(fmt, ap);
+
+  if(locking)
+    release(&pr.lock);
+}
+
 // Logs to console if DEBUGMODE is on.
 void logf(char *fmt, ...) {
   int locking = pr.locking;
