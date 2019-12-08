@@ -74,7 +74,6 @@ usertrap(void)
     printf("usertrap(): unexpected scause %p (%s) pid=%d tid=%d\n", r_scause(), scause_desc(r_scause()), thread->parentProc->pid, thread->tid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     thread->parentProc->killed = 1;
-    
   }
 
   if(thread->parentProc->killed)

@@ -159,7 +159,7 @@ allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr, int isMain) {
   for(int i = 0; i < NTHREAD; i++) {
     t = &threads[i];
     acq_thread(t, "allocthread");
-    if(t->state == UNUSED) {
+    if(t->state == UNUSED || t->state == ZOMBIE) {
       found = 1;
       t->tid = alloctid();
 
@@ -542,7 +542,15 @@ exit(int status)
     acq_thread(t, "exiting");
     t->xstate = status;
     t->state = ZOMBIE;
-    sched();
+
+    // Unlink the thread from parent.
+    for (int i = 0; i < NTHREADPERPROC; i++) {
+      if (t->parentProc->threads[i] == t) {
+        t->parentProc->threads[i] = 0;
+      }
+    }
+    
+    unscheduling();
     panic("zombie child thread exit");
   }
 
@@ -601,19 +609,15 @@ exit(int status)
   // Parent might be sleeping in wait().
   wakeup1(original_parent->threads[0]);
 
-  if (t->parentProc) {
-    logf("setting up parent proc state for %s(%p)\n", t->parentProc->name, t->parentProc);
-    t->parentProc->state = ZOMBIE;
-    t->xstate = status;
-    t->state = ZOMBIE;
-  }
+  t->xstate = status;
+  t->state = ZOMBIE;
 
   rel_thread(original_parent->threads[0], "exit_parentProcThread0");
 
   logf("exited t[%d] on h[%d]\n", t->tid, cpuid());
 
   // Jump into the scheduler, never to return.
-  sched();
+  unscheduling();
   panic("zombie main thread exit");
 }
 
@@ -741,8 +745,12 @@ scheduler(void)
 // be proc->intena and proc->noff, but that would
 // break in the few places where a lock is held but
 // there's no process.
+// 
+// Don't try to acquire parentProc in this method as
+// thread exit would also call unscheduling which could
+// have delinked the parentProc from the current exiting thread.
 void
-sched(void)
+unscheduling(void)
 {
   int intena;
   struct thread *t = mythread();
@@ -759,6 +767,8 @@ sched(void)
   intena = mycpu()->intena;
 
   logif(LOG_SCHED, "T[%d] to scheduler h[%d]\n", mythread()->tid, cpuid());
+  if (mythread()->state != ZOMBIE)
+    logthreadf(mythread(), "unscheduling");
 
   swtch(&t->context, &mycpu()->scheduler);
   mycpu()->intena = intena;
@@ -772,7 +782,7 @@ yield(void)
   acq_thread(t, "yield_before");
   t->state = RUNNABLE;
 
-  sched();
+  unscheduling();
   rel_thread(t, "yield_after");
 }
 
@@ -819,7 +829,7 @@ sleep(void *chan, struct spinlock *lk)
   t->chan = chan;
   t->state = SLEEPING;
 
-  sched();
+  unscheduling();
 
   // Tidy up.
   t->chan = 0;

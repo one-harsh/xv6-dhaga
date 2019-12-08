@@ -101,7 +101,7 @@ struct thread*  mythread();
 int             createThread(uint64);
 void            procinit(void);
 void            scheduler(void) __attribute__((noreturn));
-void            sched(void);
+void            unscheduling(void);
 void            setproc(struct proc*);
 void            sleep(void*, struct spinlock*);
 void            userinit(void);
