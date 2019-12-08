@@ -82,7 +82,7 @@ void            printf(char*, ...);
 void            logf(char*, ...);
 void            logif(int, char*, ...);
 void            lognoisef(char*, ...);
-void            logthreadf(struct thread *);
+void            logthreadf(struct thread *, char *);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 

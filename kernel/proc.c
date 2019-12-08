@@ -239,7 +239,7 @@ int createThread(uint64 va) {
   }
 
 //  memset(nt->tf, 0, sizeof nt->tf);
-  logthreadf(nt);
+  logthreadf(nt, "createThread");
   t->parentProc->threads[i] = nt;
   nt->parentProc = t->parentProc;
 
@@ -281,7 +281,7 @@ freeThread(struct thread *t)
 {
   // Handle linking of thread->previous & thread->next
   if(t->tf) {
-    logthreadf(t);
+    logthreadf(t, "freeThread");
     kfree((void*)t->tf);
   }
   t->tf = 0;
