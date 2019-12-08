@@ -177,8 +177,12 @@ void logthreadf(struct thread *t, char* why) {
   logif(LOG_TF, "\nt->tf->epc - %p\n", t->tf->epc);
   logif(LOG_TF, "t->tf->sp - %p\n", t->tf->sp);
   logif(LOG_TF, "t->tf->ra - %p\n", t->tf->ra);  
-  logif(LOG_TF, "\nt->tf->s0 - %p\n", t->tf->s0);
-  logif(LOG_TF, "t->tf->s1 - %p\n", t->tf->s1);
+  logif(LOG_TF, "t->tf->s0 - %p\n", t->tf->s0);
+  logif(LOG_TF, "\nt->tf->kernel_satp - %p\n", t->tf->kernel_satp);
+  logif(LOG_TF, "t->tf->kernel_sp - %p\n", t->tf->kernel_sp);
+  logif(LOG_TF, "t->tf->kernel_trap - %p\n", t->tf->kernel_trap);
+  logif(LOG_TF, "t->tf->kernel_hartid - %p\n", t->tf->kernel_hartid);  
+  logif(LOG_TF, "\nt->tf->s1 - %p\n", t->tf->s1);
   logif(LOG_TF, "t->tf->s2 - %p\n", t->tf->s2);
   logif(LOG_TF, "t->tf->s3 - %p\n", t->tf->s3);
   logif(LOG_TF, "t->tf->s4 - %p\n", t->tf->s4);
