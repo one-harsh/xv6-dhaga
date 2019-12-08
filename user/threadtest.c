@@ -9,7 +9,7 @@
 #include "kernel/riscv.h"
 
 void thread_a(void) {
-  printf("###############\n");
+  printf("*##############\n");
   exit(0);
 }
 

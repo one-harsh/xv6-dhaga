@@ -17,8 +17,8 @@
 #define NTHREADPERPROC  8
 #define THREADSTACKSIZE 8192
 
-#define DEBUGMODE       0   // Should log debug lines
+#define DEBUGMODE       1   // Should log debug lines
 #define NOISEMODE       0   // Enables noise level traces
 
 #define LOG_LOCKS       0 // log lock acquisitions and releases
-#define LOG_SCHED       0 // log schedulings of threads
+#define LOG_SCHED       1 // log schedulings of threads

@@ -152,7 +152,7 @@ int alloctid() {
 
 // Returns with t->lock held.
 static struct thread*
-allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr) {
+allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr, int isMain) {
   struct thread *t;
 
   int found = 0;
@@ -185,8 +185,13 @@ allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr) {
 
   t->context.ra = (uint64)forkret;
   t->context.sp = t->kstack + PGSIZE;
-  t->tf->epc = fnAddr;
-  t->tf->sp = stackPtrAddr;
+
+  if (!isMain){
+    *(t->tf) = *(p->threads[0]->tf);
+
+    t->tf->epc = fnAddr;
+    t->tf->sp = stackPtrAddr;
+  }
 
   t->state = RUNNABLE;
 
@@ -227,13 +232,13 @@ int createThread(uint64 va) {
     return 0;
   }
 
-  struct thread *nt = allocThread(t->parentProc, va, t->parentProc->ustacks[i]);
+  struct thread *nt = allocThread(t->parentProc, va, t->parentProc->ustacks[i], 0); // !isMain
   if (!nt) {
     rel_proc(t->parentProc, "createThread_allocThreadFailed");
     return 0;
   }
 
-  memset(nt->tf, 0, sizeof nt->tf);
+//  memset(nt->tf, 0, sizeof nt->tf);
   logthreadf(nt);
   t->parentProc->threads[i] = nt;
   nt->parentProc = t->parentProc;
@@ -260,7 +265,7 @@ allocproc(struct proc *p)
   }
 
   p->pid = allocpid();
-  p->threads[0] = allocThread(p, 0, 0);
+  p->threads[0] = allocThread(p, 0, 0, 1); // isMain
   p->threads[0]->parentProc = p;
   //p->ustacks[0] = p->kstacks[0] + PGSIZE;
 
