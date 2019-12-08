@@ -39,3 +39,4 @@ entry("uptime");
 entry("ntas");
 entry("nfree");
 entry("create_thread");
+entry("join_thread");
