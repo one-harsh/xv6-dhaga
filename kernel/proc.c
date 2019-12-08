@@ -188,7 +188,6 @@ allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr, int isMain) {
 
   if (!isMain){
     *(t->tf) = *(p->threads[0]->tf);
-
     t->tf->epc = fnAddr;
     t->tf->sp = stackPtrAddr;
   }
@@ -205,6 +204,7 @@ int createThread(uint64 va) {
   acq_proc(t->parentProc, "createThread");
   if (!t->parentProc->threads[1]) {
     uint64 oldSize = t->parentProc->sz;
+    logf("oldsize for %s - %p\n", t->parentProc->name, oldSize);
     if (growproc((NTHREADPERPROC - 1) * THREADSTACKSIZE) < 0) {
       rel_proc(t->parentProc, "createThread_growFail");
       return 0;
@@ -238,8 +238,6 @@ int createThread(uint64 va) {
     return 0;
   }
 
-//  memset(nt->tf, 0, sizeof nt->tf);
-  logthreadf(nt, "createThread");
   t->parentProc->threads[i] = nt;
   nt->parentProc = t->parentProc;
 
@@ -534,13 +532,13 @@ exit(int status)
 {
   struct thread *t = mythread();
 
-  logf("exiting %d on %d\n", t->tid, cpuid());
+  logf("exiting t[%d] on h[%d]\n", t->tid, cpuid());
 
   if(t->parentProc == initproc)
     panic("init exiting");
 
   if (t->parentProc && t->parentProc->threads[0] != t) {
-    logf("exiting %d on %d\n", t->tid, cpuid());
+    logf("exiting t[%d] on h[%d]\n", t->tid, cpuid());
     acq_thread(t, "exiting");
     t->xstate = status;
     t->state = ZOMBIE;
@@ -612,7 +610,7 @@ exit(int status)
 
   rel_thread(original_parent->threads[0], "exit_parentProcThread0");
 
-  logf("exited %d on %d\n", t->tid, cpuid());
+  logf("exited t[%d] on h[%d]\n", t->tid, cpuid());
 
   // Jump into the scheduler, never to return.
   sched();
@@ -713,7 +711,7 @@ scheduler(void)
         t->state = RUNNING;
         c->thread = t;
 
-        logif(LOG_SCHED, "scheduler to T(%d) on h%d\n", mythread()->tid, cpuid());
+        logif(LOG_SCHED, "scheduler to T[%d] on h[%d]\n", mythread()->tid, cpuid());
         logthreadf(t, "scheduling");
         swtch(&c->scheduler, &t->context);
 
@@ -736,8 +734,8 @@ scheduler(void)
   }
 }
 
-// Switch to scheduler.  Must hold only p->lock
-// and have changed proc->state. Saves and restores
+// Switch to scheduler.  Must hold only t->lock
+// and have changed thread->state. Saves and restores
 // intena because intena is a property of this
 // kernel thread, not this CPU. It should
 // be proc->intena and proc->noff, but that would
@@ -760,8 +758,7 @@ sched(void)
 
   intena = mycpu()->intena;
 
-  logif(LOG_SCHED, "T(%d) to scheduler h%d\n", mythread()->tid, cpuid());
-  //logthreadf(t, "unscheduling");
+  logif(LOG_SCHED, "T[%d] to scheduler h[%d]\n", mythread()->tid, cpuid());
 
   swtch(&t->context, &mycpu()->scheduler);
   mycpu()->intena = intena;

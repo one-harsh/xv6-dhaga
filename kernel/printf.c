@@ -148,7 +148,7 @@ void logf(char *fmt, ...) {
 
   va_list ap;
   va_start(ap, fmt);
-  if (DEBUGMODE) {
+  if (DEBUGMODE || NOISEMODE) {
       print(fmt, ap);
   }
 
@@ -173,7 +173,7 @@ void lognoisef(char *fmt, ...) {
 
 // Logs thread's trapframe to console if NOISEMODE is on.
 void logthreadf(struct thread *t, char* why) {
-  logif(LOG_TF, "\nlogging for thread - %d on %d, coz %s\n", t->tid, cpuid(), why);
+  logif(LOG_TF, "\nlogging for thread - t[%d] on h[%d], coz %s\n", t->tid, cpuid(), why);
   logif(LOG_TF, "\nt->tf->epc - %p\n", t->tf->epc);
   logif(LOG_TF, "t->tf->sp - %p\n", t->tf->sp);
   logif(LOG_TF, "t->tf->ra - %p\n", t->tf->ra);  
@@ -217,7 +217,7 @@ panic(char *s)
   printf("PANIC: ");
   printf(s);
   printf("\n");
-  printf("PANIC in thread - %d on %d\n", tid, cpu);
+  printf("PANIC in thread - t[%d] on h[%d]\n", tid, cpu);
   backtrace();
   printf("HINT: restart xv6 using 'make qemu-gdb', type 'b panic' (to set breakpoint in panic) in the gdb window, followed by 'c' (continue), and when the kernel hits the breakpoint, type 'bt' to get a backtrace\n");
   panicked = 1; // freeze other CPUs

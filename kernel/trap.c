@@ -49,7 +49,7 @@ usertrap(void)
   w_stvec((uint64)kernelvec);
 
   struct thread *thread = mythread();
-  
+
   // save user program counter.
   thread->tf->epc = r_sepc();
   
@@ -129,6 +129,7 @@ usertrapret(void)
   // and switches to user mode with sret.
   uint64 fn = TRAMPOLINE + (userret - trampoline);
   ((void (*)(uint64,uint64))fn)(TRAPFRAME, satp);
+  logthreadf(thread, "usertrapret");
 }
 
 // interrupts and exceptions from kernel code go here via kernelvec,
@@ -147,7 +148,7 @@ kerneltrap()
     panic("kerneltrap: interrupts enabled");
 
   if((which_dev = devintr()) == 0){
-    printf("scause %p (%s) on h%d\n", scause, scause_desc(scause), cpuid());
+    printf("scause %p (%s) on h[%d]\n", scause, scause_desc(scause), cpuid());
     printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
     panic("kerneltrap");
   }
