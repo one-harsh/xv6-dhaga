@@ -3,6 +3,7 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
+#include "debug.h"
 
 void main();
 void timerinit();
@@ -15,6 +16,8 @@ uint64 mscratch0[NCPU * 32];
 
 // assembly code in kernelvec.S for machine-mode timer interrupt.
 extern void timervec();
+// assembly code in kernelvec.S for machine-mode trap handler.
+extern void mtraphandler();
 
 // entry.S jumps here in machine mode on stack0.
 void
@@ -60,7 +63,7 @@ timerinit()
   int id = r_mhartid();
 
   // ask the CLINT for a timer interrupt.
-  int interval = 1000000; // cycles; about 1/10th second in qemu.
+  int interval = LONG_TIMER_INTERVAL ? 70000000 : 1000000; // cycles; about 7 sec /  0.1 seconds in qemu.
   *(uint64*)CLINT_MTIMECMP(id) = *(uint64*)CLINT_MTIME + interval;
 
   // prepare information in scratch[] for timervec.
@@ -73,11 +76,13 @@ timerinit()
   w_mscratch((uint64)scratch);
 
   // set the machine-mode trap handler.
-  w_mtvec((uint64)timervec);
+  // The 1 at the end signifies mtvec.MODE = 1, meaning vectored
+  uint64 mtvec = (uint64)mtraphandler | 1;
+  w_mtvec(mtvec);
 
   // enable machine-mode interrupts.
   w_mstatus(r_mstatus() | MSTATUS_MIE);
 
-  // enable machine-mode timer interrupts.
-  w_mie(r_mie() | MIE_MTIE);
+  // enable machine-mode timer and software interrupts.
+  w_mie(r_mie() | MIE_MTIE | MIE_MSIE);
 }

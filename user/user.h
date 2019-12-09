@@ -30,6 +30,7 @@ int umount(char*);
 int nfree();
 int create_thread(void (*func)());
 int join_thread(int);
+int ipi();
 
 // ulib.c
 int stat(const char*, struct stat*);

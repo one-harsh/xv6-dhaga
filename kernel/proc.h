@@ -91,6 +91,8 @@ struct thread {
   struct proc *parentProc;
   enum state state;
   int xstate;                  // Exit status to be returned to parent's wait
+
+  uint64 kstack;
 };
 
 // Per-process state
@@ -104,7 +106,6 @@ struct proc {
   int pid;                                // Process ID
 
   // these are private to the process, so p->lock need not be held.
-  uint64 kstack;                          // Virtual address of kernel stack
   uint64 sz;                              // Size of process memory (bytes)
   pagetable_t pagetable;                  // Page table
   struct file *ofile[NOFILE];             // Open files
@@ -112,5 +113,5 @@ struct proc {
   char name[16];                          // Process name (debugging)
 
   struct thread* threads[NTHREADPERPROC]; // Pre-allocated threads possible for a given proc
-  uint64 stacks[NTHREADPERPROC];          // Individual stacks for the threads
+  uint64 ustacks[NTHREADPERPROC];          // Individual user stacks for the threads
 };

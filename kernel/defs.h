@@ -81,7 +81,8 @@ int             pipewrite(struct pipe*, uint64, int);
 void            printf(char*, ...);
 void            logf(char*, ...);
 void            lognoisef(char*, ...);
-void            logthreadf(struct thread *);
+void            logthreadf(struct thread *, char* why);
+void            logif(int, char*, ...);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
@@ -101,7 +102,7 @@ int             createThread(uint64);
 int             joinThread(int);
 void            procinit(void);
 void            scheduler(void) __attribute__((noreturn));
-void            sched(void);
+void            unscheduling(void);
 void            setproc(struct proc*);
 void            sleep(void*, struct spinlock*);
 void            userinit(void);
@@ -111,6 +112,7 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+void            tlb_shootdown_all(int log_this_one);
 
 // swtch.S
 void            swtch(struct context*, struct context*);

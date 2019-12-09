@@ -123,6 +123,23 @@ printf(char *fmt, ...) {
     release(&pr.lock);
 }
 
+void logif(int debug_flag, char *fmt, ...) {
+  if(debug_flag == 0){
+    return;
+  }
+
+  int locking = pr.locking;
+  if(locking)
+    acquire(&pr.lock);
+
+  va_list ap;
+  va_start(ap, fmt);
+  print(fmt, ap);
+
+  if(locking)
+    release(&pr.lock);
+}
+
 // Logs to console if DEBUGMODE is on.
 void logf(char *fmt, ...) {
   int locking = pr.locking;
@@ -131,7 +148,7 @@ void logf(char *fmt, ...) {
 
   va_list ap;
   va_start(ap, fmt);
-  if (DEBUGMODE) {
+  if (DEBUGMODE || NOISEMODE) {
       print(fmt, ap);
   }
 
@@ -155,24 +172,27 @@ void lognoisef(char *fmt, ...) {
 }
 
 // Logs thread's trapframe to console if NOISEMODE is on.
-void logthreadf(struct thread *t) {
-  lognoisef("\nlogging for thread - %d on %d\n", t->tid, cpuid());
-  lognoisef("\nt->tf->epc - %p\n", t->tf->epc);
-  lognoisef("t->tf->sp - %p\n", t->tf->sp);
-  lognoisef("t->tf->ra - %p\n", t->tf->ra);
-  
-  lognoisef("\nt->tf->s0 - %p\n", t->tf->s0);
-  lognoisef("t->tf->s1 - %p\n", t->tf->s1);
-  lognoisef("t->tf->s2 - %p\n", t->tf->s2);
-  lognoisef("t->tf->s3 - %p\n", t->tf->s3);
-  lognoisef("t->tf->s4 - %p\n", t->tf->s4);
-  lognoisef("t->tf->s5 - %p\n", t->tf->s5);
-  lognoisef("t->tf->s6 - %p\n", t->tf->s6);
-  lognoisef("t->tf->s7 - %p\n", t->tf->s7);
-  lognoisef("t->tf->s8 - %p\n", t->tf->s8);
-  lognoisef("t->tf->s9 - %p\n", t->tf->s9);
-  lognoisef("t->tf->s10 - %p\n", t->tf->s10);
-  lognoisef("t->tf->s11 - %p\n\n", t->tf->s11);
+void logthreadf(struct thread *t, char* why) {
+  logif(LOG_TF | NOISEMODE, "\nlogging for thread - t[%d] on h[%d], coz %s\n", t->tid, cpuid(), why);
+  logif(LOG_TF | NOISEMODE, "\nt->tf->epc - %p\n", t->tf->epc);
+  logif(LOG_TF | NOISEMODE, "t->tf->sp - %p\n", t->tf->sp);
+  logif(LOG_TF | NOISEMODE, "t->tf->ra - %p\n", t->tf->ra);  
+  logif(LOG_TF | NOISEMODE, "t->tf->s0 - %p\n", t->tf->s0);
+  logif(LOG_TF | NOISEMODE, "\nt->tf->kernel_satp - %p\n", t->tf->kernel_satp);
+  logif(LOG_TF | NOISEMODE, "t->tf->kernel_sp - %p\n", t->tf->kernel_sp);
+  logif(LOG_TF | NOISEMODE, "t->tf->kernel_trap - %p\n", t->tf->kernel_trap);
+  logif(LOG_TF | NOISEMODE, "t->tf->kernel_hartid - %p\n", t->tf->kernel_hartid);  
+  logif(LOG_TF | NOISEMODE, "\nt->tf->s1 - %p\n", t->tf->s1);
+  logif(LOG_TF | NOISEMODE, "t->tf->s2 - %p\n", t->tf->s2);
+  logif(LOG_TF | NOISEMODE, "t->tf->s3 - %p\n", t->tf->s3);
+  logif(LOG_TF | NOISEMODE, "t->tf->s4 - %p\n", t->tf->s4);
+  logif(LOG_TF | NOISEMODE, "t->tf->s5 - %p\n", t->tf->s5);
+  logif(LOG_TF | NOISEMODE, "t->tf->s6 - %p\n", t->tf->s6);
+  logif(LOG_TF | NOISEMODE, "t->tf->s7 - %p\n", t->tf->s7);
+  logif(LOG_TF | NOISEMODE, "t->tf->s8 - %p\n", t->tf->s8);
+  logif(LOG_TF | NOISEMODE, "t->tf->s9 - %p\n", t->tf->s9);
+  logif(LOG_TF | NOISEMODE, "t->tf->s10 - %p\n", t->tf->s10);
+  logif(LOG_TF | NOISEMODE, "t->tf->s11 - %p\n\n", t->tf->s11);
 }
 
 void
@@ -197,7 +217,7 @@ panic(char *s)
   printf("PANIC: ");
   printf(s);
   printf("\n");
-  printf("PANIC in thread - %d on %d\n", tid, cpu);
+  printf("PANIC in thread - t[%d] on h[%d]\n", tid, cpu);
   backtrace();
   printf("HINT: restart xv6 using 'make qemu-gdb', type 'b panic' (to set breakpoint in panic) in the gdb window, followed by 'c' (continue), and when the kernel hits the breakpoint, type 'bt' to get a backtrace\n");
   panicked = 1; // freeze other CPUs

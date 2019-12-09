@@ -8,6 +8,7 @@
 #include "file.h"
 #include "proc.h"
 #include "defs.h"
+#include "debug.h"
 
 struct cpu cpus[NCPU];
 
@@ -65,22 +66,22 @@ procinit(void)
   initlock(&pid_lock, "nextpid");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
-
-      // Allocate a page for the process's kernel stack.
-      // Map it high in memory, followed by an invalid
-      // guard page.
-      char *pa = kalloc();
-      if(pa == 0)
-        panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
   }
 
   struct thread *t;
   initlock(&tid_lock, "nexttid");
   for(t = threads; t < &threads[NTHREAD]; t++) {
       initlock(&t->lock, "thread");
+
+      // Allocate a page for the thread's kernel stack.
+      // Map it high in memory, followed by an invalid
+      // guard page.
+      char *pa = kalloc();
+      if(pa == 0)
+        panic("kalloc");
+      uint64 va = KSTACK((int) (t - threads));
+      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      t->kstack = va;
   }
 
   kvminithart();
@@ -152,13 +153,14 @@ int alloctid() {
 
 // Returns with t->lock held.
 static struct thread*
-allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr) {
+allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr, int isMain) {
   struct thread *t;
 
   int found = 0;
-  for(t = threads; t < &threads[NTHREAD]; t++) {
+  for(int i = 0; i < NTHREAD; i++) {
+    t = &threads[i];
     acq_thread(t, "allocthread");
-    if(t->state == UNUSED) {
+    if(t->state == UNUSED || t->state == ZOMBIE) {
       found = 1;
       t->tid = alloctid();
 
@@ -183,9 +185,13 @@ allocThread(struct proc *p, uint64 fnAddr, uint64 stackPtrAddr) {
   memset(&t->context, 0, sizeof t->context);
 
   t->context.ra = (uint64)forkret;
-  t->context.sp = p->kstack + PGSIZE;
-  t->tf->epc = fnAddr;
-  t->tf->sp = stackPtrAddr;
+  t->context.sp = t->kstack + PGSIZE;
+
+  if (!isMain){
+    *(t->tf) = *(p->threads[0]->tf);
+    t->tf->epc = fnAddr;
+    t->tf->sp = stackPtrAddr;
+  }
 
   t->state = RUNNABLE;
 
@@ -199,13 +205,14 @@ int createThread(uint64 va) {
   acq_proc(t->parentProc, "createThread");
   if (!t->parentProc->threads[1]) {
     uint64 oldSize = t->parentProc->sz;
+    logf("oldsize for %s - %p\n", t->parentProc->name, oldSize);
     if (growproc((NTHREADPERPROC - 1) * THREADSTACKSIZE) < 0) {
       rel_proc(t->parentProc, "createThread_growFail");
       return 0;
     }
 
     for (i = 1; i < NTHREADPERPROC; i++) {
-      t->parentProc->stacks[i] = oldSize + THREADSTACKSIZE * i;
+      t->parentProc->ustacks[i] = oldSize + THREADSTACKSIZE * i;
     }
   }
 
@@ -213,11 +220,9 @@ int createThread(uint64 va) {
   int found = 0;
   for (i = 1; i < NTHREADPERPROC; i++) {
     temp = t->parentProc->threads[i];
-    if (temp != t) {
-      if (temp == 0) {
-        found = 1;
-        break;
-      }
+    if (temp != t && temp == 0) {
+      found = 1;
+      break;
     }
   }
 
@@ -226,14 +231,12 @@ int createThread(uint64 va) {
     return 0;
   }
 
-  struct thread *nt = allocThread(t->parentProc, va, t->parentProc->stacks[i]);
+  struct thread *nt = allocThread(t->parentProc, va, t->parentProc->ustacks[i], 0); // !isMain
   if (!nt) {
     rel_proc(t->parentProc, "createThread_allocThreadFailed");
     return 0;
   }
 
-  memset(nt->tf, 0, sizeof nt->tf);
-  logthreadf(nt);
   t->parentProc->threads[i] = nt;
   nt->parentProc = t->parentProc;
 
@@ -251,7 +254,7 @@ int joinThread(int tid) {
   struct proc *p = myproc();
   int found = 0;
   struct thread *t;
-  
+
   int i = 0;
   for(i = 0; i < NTHREADPERPROC; i++){
     t = p->threads[i];
@@ -260,7 +263,7 @@ int joinThread(int tid) {
       break;
     }
   }
-  
+
   if(found == 0){
     return -1;
   }
@@ -288,9 +291,8 @@ allocproc(struct proc *p)
   }
 
   p->pid = allocpid();
-  p->threads[0] = allocThread(p, 0, 0);
+  p->threads[0] = allocThread(p, 0, 0, 1); // isMain
   p->threads[0]->parentProc = p;
-  p->stacks[0] = p->sz;
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -303,8 +305,10 @@ static void
 freeThread(struct thread *t)
 {
   // Handle linking of thread->previous & thread->next
-  if(t->tf)
+  if(t->tf) {
+    logthreadf(t, "freeThread");
     kfree((void*)t->tf);
+  }
   t->tf = 0;
   t->tid = 0;
   t->chan = 0;
@@ -320,12 +324,13 @@ static void
 freeproc(struct proc *p)
 {
   if (p->threads) {
-    struct thread *t;
-    for (t = p->threads[0]; t < p->threads[NTHREADPERPROC]; t++) {
-      if (t) {
-        freeThread(t); // BUGBUG? Should acquire lock of each thread before freeing it?
-      }
+    for (int i = 0; i < NTHREADPERPROC; i++) {
+      struct thread *t = p->threads[i];
+      if (p->threads[i])
+        freeThread(t);
     }
+
+    logf("freed all threads\n");
   }
 
   if(p->pagetable)
@@ -434,7 +439,7 @@ userinit(void)
 int
 growproc(int n)
 {
-  // BUGBUG? acquire proc lock here?
+  // We are already under proc lock
   uint sz;
   struct proc *p = myproc();
 
@@ -554,16 +559,25 @@ exit(int status)
 {
   struct thread *t = mythread();
 
-  logf("exiting %d on %d\n", t->tid, cpuid());
+  logf("exiting t[%d] on h[%d]\n", t->tid, cpuid());
 
   if(t->parentProc == initproc)
     panic("init exiting");
 
   if (t->parentProc && t->parentProc->threads[0] != t) {
+    logf("exiting t[%d] on h[%d]\n", t->tid, cpuid());
     acq_thread(t, "exiting");
     t->xstate = status;
     t->state = ZOMBIE;
-    sched();
+
+    // Unlink the thread from parent.
+    for (int i = 0; i < NTHREADPERPROC; i++) {
+      if (t->parentProc->threads[i] == t) {
+        t->parentProc->threads[i] = 0;
+      }
+    }
+    
+    unscheduling();
     panic("zombie child thread exit");
   }
 
@@ -583,6 +597,8 @@ exit(int status)
   end_op(ROOTDEV);
   t->parentProc->cwd = 0;
 
+  logf("closed all files for %d\n", t->tid);
+
   // we might re-parent a child to init. we can't be precise about
   // waking up init, since we can't acquire its lock once we've
   // acquired any other proc lock. so wake up init whether that's
@@ -592,6 +608,8 @@ exit(int status)
   wakeup1(initproc->threads[0]);
   rel_thread(initproc->threads[0], "exit_initProc");
 
+  logf("woken up initproc for %d's exit\n", t->tid);
+
   // grab a copy of p->parent, to ensure that we unlock the same
   // parent we locked. in case our parent gives us away to init while
   // we're waiting for the parent lock. we may then race with an
@@ -600,7 +618,9 @@ exit(int status)
   // as anything else.
   acq_thread(t, "exit_getParent");
   struct proc *original_parent = t->parentProc->parent;
+
   rel_thread(t, "exit_getParent");
+  logf("found the original parent for %d as %s\n", t->tid, original_parent->name);
   
   // we need the parent's lock in order to wake it up from wait().
   // the parent-then-child rule says we have to lock it first.
@@ -610,19 +630,21 @@ exit(int status)
 
   // Give any children to init.
   reparent(t->parentProc);
+  logf("freeing %s (tid-%d))\n", t->parentProc->name, t->tid);
   freeproc(t->parentProc);
 
   // Parent might be sleeping in wait().
   wakeup1(original_parent->threads[0]);
 
-  t->parentProc->state = ZOMBIE;
   t->xstate = status;
   t->state = ZOMBIE;
 
   rel_thread(original_parent->threads[0], "exit_parentProcThread0");
 
+  logf("exited t[%d] on h[%d]\n", t->tid, cpuid());
+
   // Jump into the scheduler, never to return.
-  sched();
+  unscheduling();
   panic("zombie main thread exit");
 }
 
@@ -720,8 +742,8 @@ scheduler(void)
         t->state = RUNNING;
         c->thread = t;
 
-        logf("printing (%d) on %d\n", mythread()->tid, cpuid());
-
+        logif(LOG_SCHED, "scheduler to T[%d] on h[%d]\n", mythread()->tid, cpuid());
+        logthreadf(t, "scheduling");
         swtch(&c->scheduler, &t->context);
 
         // Thread is done running for now.
@@ -743,15 +765,19 @@ scheduler(void)
   }
 }
 
-// Switch to scheduler.  Must hold only p->lock
-// and have changed proc->state. Saves and restores
+// Switch to scheduler.  Must hold only t->lock
+// and have changed thread->state. Saves and restores
 // intena because intena is a property of this
 // kernel thread, not this CPU. It should
 // be proc->intena and proc->noff, but that would
 // break in the few places where a lock is held but
 // there's no process.
+// 
+// Don't try to acquire parentProc in this method as
+// thread exit would also call unscheduling which could
+// have delinked the parentProc from the current exiting thread.
 void
-sched(void)
+unscheduling(void)
 {
   int intena;
   struct thread *t = mythread();
@@ -766,6 +792,11 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
+
+  logif(LOG_SCHED, "T[%d] to scheduler h[%d]\n", mythread()->tid, cpuid());
+  if (mythread()->state != ZOMBIE)
+    logthreadf(mythread(), "unscheduling");
+
   swtch(&t->context, &mycpu()->scheduler);
   mycpu()->intena = intena;
 }
@@ -778,7 +809,7 @@ yield(void)
   acq_thread(t, "yield_before");
   t->state = RUNNABLE;
 
-  sched();
+  unscheduling();
   rel_thread(t, "yield_after");
 }
 
@@ -825,7 +856,7 @@ sleep(void *chan, struct spinlock *lk)
   t->chan = chan;
   t->state = SLEEPING;
 
-  sched();
+  unscheduling();
 
   // Tidy up.
   t->chan = 0;
@@ -918,6 +949,62 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
     memmove(dst, (char*)src, len);
     return 0;
   }
+}
+
+void
+tlb_shootdown_all(int log_this_one)
+{
+  if(!ENABLE_TLB_SHOOTDOWN){
+    return;
+  }
+
+  int log_tlb = log_this_one || LOG_ALWAYS_TLB_SHOOTDOWN;
+
+  push_off();
+  int hartid = cpuid();
+
+  if(log_tlb) {
+    printf("TLB shootdown from %d\n", hartid);
+  }
+  
+  sfence_vma();
+
+  for (int i = 0; i < NCPU; i++) {
+    if(i != hartid){
+      *(uint32*)(CLINT_MSIP(i)) = 1; 
+    }
+  }
+
+  uint32 pending;
+  int all_acked;
+  do {
+    all_acked = 1;
+    for (int i = 0; i < NCPU; i++) {
+      if(i != hartid){
+         pending = *(uint32*)(CLINT_MSIP(i));
+
+         if(log_tlb) {
+          printf("%d", pending);
+         }
+
+         all_acked *= (1 - pending); // If any of the pending are 1, all_acked is 0
+      } else {
+        if(log_tlb) {
+          printf("X");
+        }
+      }
+    }
+
+    if(log_tlb) {
+      printf("\n");
+    }
+  } while (all_acked == 0);
+
+  if(log_tlb) {
+    printf("... all acked\n", hartid);
+  }
+  
+  pop_off();
 }
 
 // Print a process listing to console.  For debugging.

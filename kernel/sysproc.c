@@ -67,8 +67,12 @@ sys_sbrk(void)
   if(argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
-  if(growproc(n) < 0)
+  acquire(&myproc()->lock);
+  if(growproc(n) < 0) {
+    release(&myproc()->lock);
     return -1;
+  }
+  release(&myproc()->lock);
   return addr;
 }
 
@@ -114,4 +118,12 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// send an IPI to all other harts
+uint64
+sys_ipi(void)
+{
+  tlb_shootdown_all(1);
+  return 0;
 }

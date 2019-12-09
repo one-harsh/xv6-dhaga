@@ -15,9 +15,11 @@
 #define NNETIF          2
 #define NTHREAD         512  // 8*NPROC
 #define NTHREADPERPROC  8
-#define THREADSTACKSIZE 8192
+#define THREADSTACKSIZE 4096
 
 #define DEBUGMODE       0   // Should log debug lines
-#define NOISEMODE       0   // Enables noise level traces
+#define NOISEMODE       0   // Enables both debug & noise level traces
 
 #define LOG_LOCKS       0 // log lock acquisitions and releases
+#define LOG_SCHED       0 // log schedulings of threads
+#define LOG_TF          0 // log trap frames

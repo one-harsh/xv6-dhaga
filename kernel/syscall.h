@@ -26,3 +26,4 @@
 #define SYS_nfree  23
 #define SYS_create_thread   24
 #define SYS_join_thread   25
+#define SYS_ipi    26

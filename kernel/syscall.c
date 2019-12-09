@@ -108,6 +108,7 @@ extern uint64 sys_ntas(void);
 extern uint64 sys_nfree(void);
 extern uint64 sys_create_thread(void);
 extern uint64 sys_join_thread(void);
+extern uint64 sys_ipi(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -134,7 +135,8 @@ static uint64 (*syscalls[])(void) = {
 [SYS_ntas]    sys_ntas,
 [SYS_nfree]   sys_nfree,
 [SYS_create_thread] sys_create_thread,
-[SYS_join_thread] sys_join_thread
+[SYS_join_thread] sys_join_thread,
+[SYS_ipi]     sys_ipi
 };
 
 void

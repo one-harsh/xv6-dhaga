@@ -86,6 +86,28 @@ kernelvec:
         sret
 
         #
+        # machine-mode trap handler.
+        #
+.globl mtraphandler
+.align 8
+mtraphandler:
+        nop         # +0
+        nop         # +2
+        nop         # +4
+        nop         # +6
+        nop         # +8
+        nop         # +10
+        j ipivec    # +12, mtraphandler + 4*3 = mtvec.BASE + 4*(mcause.EXC) for MSIP
+        nop         # +14
+        nop         # +16
+        nop         # +18
+        nop         # +20
+        nop         # +22
+        nop         # +24
+        nop         # +26
+        j timervec  # +28, mtraphandler + 4*7 = mtvec.BASE + 4*(mcause.EXC) for MTIP
+
+        #
         # machine-mode timer interrupt.
         #
 .globl timervec
@@ -112,6 +134,40 @@ timervec:
         # raise a supervisor software interrupt.
 	li a1, 2
         csrw sip, a1
+
+        ld a3, 16(a0)
+        ld a2, 8(a0)
+        ld a1, 0(a0)
+        csrrw a0, mscratch, a0
+
+        mret
+
+        #
+        # machine-mode software interrupt (IPI)
+        #
+
+.equ CLINT_BASE,      0x02000000
+
+.globl ipivec
+.align 4
+ipivec:
+
+        csrrw a0, mscratch, a0
+        sd a1, 0(a0)
+        sd a2, 8(a0)
+        sd a3, 16(a0)
+
+        # clear the TLB cache, assuming that any IPI is due to a TLB shootdown request
+        sfence.vma zero, zero
+
+        # clear the machine mode software interrupt pending
+        li a2, 4             # a2 <= 4
+        csrr a1, mhartid;    # a1 <= hartId
+        mul a2, a2, a1       # a2 <= a2 * a1... 4*hartId
+        li a1, CLINT_BASE    # a1 <= CLINT_BASE        
+        add a2, a2, a1       # a2 <= a2 * a1.... (4*hartId) + CLINT_BASE
+        li a3, 0             # a3 <= 0
+        sw a3, 0(a2)         # u32[a2 + 0] <= a3... write 32-bit 0 to that address!
 
         ld a3, 16(a0)
         ld a2, 8(a0)
