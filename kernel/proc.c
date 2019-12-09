@@ -250,6 +250,35 @@ int createThread(uint64 va) {
   return nt->tid;
 }
 
+int joinThread(int tid) {
+  struct proc *p = myproc();
+  int found = 0;
+  struct thread *t;
+
+  int i = 0;
+  for(i = 0; i < NTHREADPERPROC; i++){
+    t = p->threads[i];
+    if(t && t->tid == tid) {
+      found = 1;
+      break;
+    }
+  }
+
+  if(found == 0){
+    return -1;
+  }
+
+  for(;;){
+    acquire(&t->lock);
+    if(t->state == ZOMBIE){
+      freeThread(t);
+      release(&t->lock);
+      return 0;
+    }
+    release(&t->lock);
+  }
+}
+
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
 // and return with p->thread[0]->lock held.

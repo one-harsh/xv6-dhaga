@@ -38,5 +38,6 @@ entry("sleep");
 entry("uptime");
 entry("ntas");
 entry("nfree");
-entry("ipi");
 entry("create_thread");
+entry("join_thread");
+entry("ipi");
