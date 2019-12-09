@@ -28,6 +28,7 @@ int crash(const char*, int);
 int mount(char*, char *);
 int umount(char*);
 int nfree();
+int ipi();
 int create_thread(void*);
 
 // ulib.c

@@ -105,3 +105,11 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// send an IPI to all other harts
+uint64
+sys_ipi(void)
+{
+  tlb_shootdown_all(1);
+  return 0;
+}

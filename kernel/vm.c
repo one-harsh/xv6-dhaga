@@ -89,7 +89,9 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
       if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
         return 0;
       memset(pagetable, 0, PGSIZE);
+
       *pte = PA2PTE(pagetable) | PTE_V;
+      tlb_shootdown_all(0);
     }
   }
   return &pagetable[PX(0, va)];
@@ -165,7 +167,10 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       return -1;
     if(*pte & PTE_V)
       panic("remap");
+
     *pte = PA2PTE(pa) | perm | PTE_V;
+    tlb_shootdown_all(0);
+
     if(a == last)
       break;
     a += PGSIZE;
@@ -199,7 +204,10 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 size, int do_free)
       pa = PTE2PA(*pte);
       kfree((void*)pa);
     }
+
     *pte = 0;
+    tlb_shootdown_all(0);
+
     if(a == last)
       break;
     a += PGSIZE;
