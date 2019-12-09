@@ -180,6 +180,8 @@ UPROGS=\
 	$U/_bcachetest\
 	$U/_alloctest\
 	$U/_specialtest\
+	$U/_threadtest\
+	$U/_conctest\
 	$U/_ipitest\
 	# $U/_symlinktest\
 

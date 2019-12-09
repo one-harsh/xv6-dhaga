@@ -64,6 +64,6 @@
 //   fixed-size stack
 //   expandable heap
 //   ...
-//   TRAPFRAME (p->tf, used by the trampoline)
+//   TRAPFRAME (thread->tf, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)

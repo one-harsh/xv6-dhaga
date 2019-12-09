@@ -34,20 +34,20 @@ fetchstr(uint64 addr, char *buf, int max)
 static uint64
 argraw(int n)
 {
-  struct proc *p = myproc();
+  struct thread *t = mythread();
   switch (n) {
   case 0:
-    return p->tf->a0;
+    return t->tf->a0;
   case 1:
-    return p->tf->a1;
+    return t->tf->a1;
   case 2:
-    return p->tf->a2;
+    return t->tf->a2;
   case 3:
-    return p->tf->a3;
+    return t->tf->a3;
   case 4:
-    return p->tf->a4;
+    return t->tf->a4;
   case 5:
-    return p->tf->a5;
+    return t->tf->a5;
   }
   panic("argraw");
   return -1;
@@ -142,13 +142,14 @@ syscall(void)
 {
   int num;
   struct proc *p = myproc();
+  struct thread *thread = mythread();
 
-  num = p->tf->a7;
+  num = thread->tf->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
-    p->tf->a0 = syscalls[num]();
+    thread->tf->a0 = syscalls[num]();
   } else {
-    printf("%d %s: unknown sys call %d\n",
-            p->pid, p->name, num);
-    p->tf->a0 = -1;
+    printf("pid - %d, procname - %s, tid - %d: unknown sys call %d\n",
+            p->pid, p->name, thread->tid, num);
+    thread->tf->a0 = -1;
   }
 }

@@ -79,6 +79,10 @@ int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
 void            printf(char*, ...);
+void            logf(char*, ...);
+void            logif(int, char*, ...);
+void            lognoisef(char*, ...);
+void            logthreadf(struct thread *, char *);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
@@ -93,10 +97,11 @@ int             kill(int);
 struct cpu*     mycpu(void);
 struct cpu*     getmycpu(void);
 struct proc*    myproc();
+struct thread*  mythread();
 int             createThread(uint64);
 void            procinit(void);
 void            scheduler(void) __attribute__((noreturn));
-void            sched(void);
+void            unscheduling(void);
 void            setproc(struct proc*);
 void            sleep(void*, struct spinlock*);
 void            userinit(void);
