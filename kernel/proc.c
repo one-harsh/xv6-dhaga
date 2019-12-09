@@ -219,11 +219,9 @@ int createThread(uint64 va) {
   int found = 0;
   for (i = 1; i < NTHREADPERPROC; i++) {
     temp = t->parentProc->threads[i];
-    if (temp != t) {
-      if (temp == 0) {
-        found = 1;
-        break;
-      }
+    if (temp != t && temp == 0) {
+      found = 1;
+      break;
     }
   }
 
@@ -265,7 +263,6 @@ allocproc(struct proc *p)
   p->pid = allocpid();
   p->threads[0] = allocThread(p, 0, 0, 1); // isMain
   p->threads[0]->parentProc = p;
-  //p->ustacks[0] = p->kstacks[0] + PGSIZE;
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -412,7 +409,7 @@ userinit(void)
 int
 growproc(int n)
 {
-  // BUGBUG? acquire proc lock here?
+  // We are already under proc lock
   uint sz;
   struct proc *p = myproc();
 

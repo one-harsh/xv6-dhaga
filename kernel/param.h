@@ -15,7 +15,7 @@
 #define NNETIF          2
 #define NTHREAD         512  // 8*NPROC
 #define NTHREADPERPROC  8
-#define THREADSTACKSIZE 8192
+#define THREADSTACKSIZE 4096
 
 #define DEBUGMODE       0   // Should log debug lines
 #define NOISEMODE       0   // Enables both debug & noise level traces
