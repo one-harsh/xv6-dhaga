@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "debug.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -166,7 +167,7 @@ void
 clockintr()
 {
   acquire(&tickslock);
-  ticks++;
+  ticks++;  
   wakeup(&ticks);
   release(&tickslock);
 }
@@ -180,6 +181,12 @@ int
 devintr()
 {
   uint64 scause = r_scause();
+  
+  if((scause & 0x8000000000000000L) && (scause & 0xff) != 9){
+    if(LOG_ALWAYS_TIMER) {
+      printf("timer on %d\n", cpuid());
+    }
+  }
 
   if((scause & 0x8000000000000000L) &&
      (scause & 0xff) == 9){
@@ -204,11 +211,10 @@ devintr()
   } else if(scause == 0x8000000000000001L){
     // software interrupt from a machine-mode timer interrupt,
     // forwarded by timervec in kernelvec.S.
-
-    if(cpuid() == 0){
+    if(cpuid() == 0){      
       clockintr();
-    }
-    
+    }    
+
     // acknowledge the software interrupt by clearing
     // the SSIP bit in sip.
     w_sip(r_sip() & ~2);

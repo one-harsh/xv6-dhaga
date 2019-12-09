@@ -24,4 +24,5 @@
 // System calls for labs
 #define SYS_ntas   22
 #define SYS_nfree  23
-#define SYS_create_thread   24
+#define SYS_ipi    24
+#define SYS_create_thread   25

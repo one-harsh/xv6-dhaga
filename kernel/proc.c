@@ -8,6 +8,7 @@
 #include "file.h"
 #include "proc.h"
 #include "defs.h"
+#include "debug.h"
 
 struct cpu cpus[NCPU];
 
@@ -919,6 +920,62 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
     memmove(dst, (char*)src, len);
     return 0;
   }
+}
+
+void
+tlb_shootdown_all(int log_this_one)
+{
+  if(!ENABLE_TLB_SHOOTDOWN){
+    return;
+  }
+
+  int log_tlb = log_this_one || LOG_ALWAYS_TLB_SHOOTDOWN;
+
+  push_off();
+  int hartid = cpuid();
+
+  if(log_tlb) {
+    printf("TLB shootdown from %d\n", hartid);
+  }
+  
+  sfence_vma();
+
+  for (int i = 0; i < NCPU; i++) {
+    if(i != hartid){
+      *(uint32*)(CLINT_MSIP(i)) = 1; 
+    }
+  }
+
+  uint32 pending;
+  int all_acked;
+  do {
+    all_acked = 1;
+    for (int i = 0; i < NCPU; i++) {
+      if(i != hartid){
+         pending = *(uint32*)(CLINT_MSIP(i));
+
+         if(log_tlb) {
+          printf("%d", pending);
+         }
+
+         all_acked *= (1 - pending); // If any of the pending are 1, all_acked is 0
+      } else {
+        if(log_tlb) {
+          printf("X");
+        }
+      }
+    }
+
+    if(log_tlb) {
+      printf("\n");
+    }
+  } while (all_acked == 0);
+
+  if(log_tlb) {
+    printf("... all acked\n", hartid);
+  }
+  
+  pop_off();
 }
 
 // Print a process listing to console.  For debugging.

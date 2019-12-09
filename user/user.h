@@ -29,6 +29,7 @@ int mount(char*, char *);
 int umount(char*);
 int nfree();
 int create_thread(void (*func)());
+int ipi();
 
 // ulib.c
 int stat(const char*, struct stat*);
